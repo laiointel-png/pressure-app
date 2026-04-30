@@ -10,6 +10,13 @@ python3 -m http.server 5173
 
 Open `http://localhost:5173`.
 
+## Prototype assets
+
+Real-photo fallback assets are stored in `assets/` and are sourced from Pexels while Nano Banana image generation is quota-blocked:
+
+- `trace-athlete-lunge.jpg`: https://www.pexels.com/photo/focused-athlete-performing-lunges-with-dumbbells-33185468/
+- `trace-athlete-squat.jpg`: https://www.pexels.com/photo/woman-performing-squats-in-modern-gym-setting-29259728/
+
 ## GitHub Pages
 
 This repo is configured for GitHub Pages through `.github/workflows/pages.yml`.

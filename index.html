@@ -3,214 +3,454 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Pressure - Accountability App Prototype</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <title>Pressure - Verified Workout Prototype</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css?v=6" />
   </head>
   <body>
     <main class="app-shell">
-      <section class="phone" aria-label="Pressure app prototype">
-        <div class="status-bar">
-          <span>09:41</span>
-          <span class="status-dot"></span>
+      <section class="device-frame" aria-label="Pressure mobile prototype">
+        <div class="status-bar" aria-hidden="true">
+          <span>9:41</span>
+          <span>Live</span>
         </div>
 
-        <section class="screen active" id="onboarding">
-          <div class="onboarding-stage">
-            <div class="grain"></div>
-            <div class="kinetic-strip" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-            <p class="eyebrow">Pressure</p>
-            <h1 id="onboarding-title">You don't need motivation.</h1>
-            <p id="onboarding-copy">Your friends will hold you accountable.</p>
-            <div class="fake-notification" id="fake-notification">
-              <span>You missed.</span>
-              <strong>EUR 10 lost</strong>
-            </div>
-          </div>
-          <button class="primary-action" id="next-onboarding" type="button">Start</button>
-        </section>
-
-        <section class="screen" id="group">
-          <div class="topline">
-            <span class="eyebrow">Setup</span>
-            <button class="ghost-button" id="demo-group" type="button">Demo group</button>
-          </div>
-          <div class="page-title">
-            <h2>Create your crew</h2>
-            <p>Choose the rules. Miss once and the group sees it.</p>
-          </div>
-
-          <form class="setup-form" id="setup-form">
-            <label>
-              Group name
-              <input value="Team Discipline" maxlength="24" />
-            </label>
-
-            <div class="choice-group" aria-label="Members">
-              <span>Members</span>
-              <div class="segmented">
-                <button class="active" type="button">3</button>
-                <button type="button">4</button>
-                <button type="button">6</button>
-                <button type="button">10</button>
-              </div>
-            </div>
-
-            <div class="choice-group" aria-label="Check-in rhythm">
-              <span>Check-in</span>
-              <div class="segmented">
-                <button class="active" type="button">Daily</button>
-                <button type="button">Weekly</button>
-              </div>
-            </div>
-
-            <div class="choice-group" aria-label="Penalty amount">
-              <span>Penalty</span>
-              <div class="segmented penalty">
-                <button type="button">EUR 5</button>
-                <button class="active" type="button">EUR 10</button>
-                <button type="button">EUR 20</button>
-              </div>
-            </div>
-
-            <button class="primary-action inline" type="submit">Go live</button>
-          </form>
-        </section>
-
-        <section class="screen" id="home">
-          <div class="home-header">
+        <section class="screen active" id="screen-home" aria-labelledby="home-title">
+          <header class="app-header">
+            <button class="icon-button" type="button" aria-label="Open menu">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16" />
+                <path d="M4 12h16" />
+                <path d="M4 17h16" />
+              </svg>
+            </button>
             <div>
-              <span class="eyebrow">Team Discipline</span>
-              <h2>Today</h2>
+              <strong>PRESSURE</strong>
+              <span>Team Iron Pact</span>
             </div>
-            <button class="icon-button" id="show-leaderboard" type="button" aria-label="Open leaderboard">#</button>
-          </div>
+            <button class="icon-button" type="button" aria-label="Notifications">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                <path d="M10 21h4" />
+              </svg>
+            </button>
+          </header>
 
-          <div class="stats-row" aria-label="Group stats">
-            <div>
+          <section class="hero-card" aria-labelledby="home-title">
+            <div class="gym-visual" aria-hidden="true">
+              <span class="rack rack-one"></span>
+              <span class="rack rack-two"></span>
+              <span class="floor-line"></span>
+            </div>
+            <div class="hero-content">
+              <span class="label">Today before 22:00</span>
+              <h1 id="home-title">Finish 4 live checks</h1>
+              <p>Workout credit unlocks only after every exercise is verified by live camera trace.</p>
+            </div>
+          </section>
+
+          <section class="status-card" aria-labelledby="today-status-title">
+            <div class="status-copy">
+              <span class="label">Current status</span>
+              <h2 id="today-status-title"><span id="today-checks">02 / 04</span> checks complete</h2>
+              <p id="next-task-copy">Next: Push-up hold. Hold clean form for 10 seconds.</p>
+            </div>
+
+            <div
+              class="segmented-progress"
+              id="home-progress"
+              role="progressbar"
+              aria-label="Workout verification progress"
+              aria-valuemin="0"
+              aria-valuemax="4"
+              aria-valuenow="2"
+            >
+              <span class="complete"></span>
+              <span class="complete"></span>
+              <span class="current"></span>
+              <span></span>
+            </div>
+
+            <button class="primary-button" id="open-camera" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+              Start live check
+            </button>
+          </section>
+
+          <section class="stats-grid" aria-label="Accountability stats">
+            <article>
               <span>Streak</span>
-              <strong id="streak-count">6</strong>
-            </div>
-            <div>
+              <strong id="streak-value">11</strong>
+              <small>days</small>
+            </article>
+            <article>
+              <span>Penalty pot</span>
+              <strong>EUR 140</strong>
+              <small>winner takes</small>
+            </article>
+            <article>
               <span>Rank</span>
               <strong>#2</strong>
-            </div>
-            <div>
-              <span>Pot</span>
-              <strong>EUR 80</strong>
-            </div>
-          </div>
-
-          <button class="check-panel" id="open-camera" type="button">
-            <span class="pulse"></span>
-            <span class="check-copy">
-              <strong id="check-status">Check-in required</strong>
-              <small>Camera opens instantly. Max 10 seconds.</small>
-            </span>
-          </button>
-
-          <section class="cycle-strip" aria-label="Challenge cycle">
-            <div>
-              <span class="eyebrow">Cycle</span>
-              <strong id="cycle-status">Waiting on Timothy</strong>
-            </div>
-            <button class="ghost-button" id="advance-cycle" type="button">Nudge</button>
-          </section>
-
-          <section class="feed" aria-label="Group feed">
-            <article class="feed-item win">
-              <div class="avatar">L</div>
-              <div>
-                <strong>Layo checked in</strong>
-                <span>Day 6 confirmed</span>
-              </div>
-              <small>now</small>
+              <small>this week</small>
             </article>
-            <article class="feed-item miss">
-              <div class="avatar danger">T</div>
-              <div>
-                <strong>Timothy missed</strong>
-                <span>EUR 10 added to the pot</span>
-              </div>
-              <small>12m</small>
-            </article>
-            <article class="feed-item">
-              <div class="avatar">M</div>
-              <div>
-                <strong>Mila won the week</strong>
-                <span>Most consistent</span>
-              </div>
-              <small>1h</small>
+            <article>
+              <span>Time left</span>
+              <strong>3h 12m</strong>
+              <small>before penalty</small>
             </article>
           </section>
 
-          <nav class="bottom-nav" aria-label="App navigation">
-            <button class="active" type="button">Home</button>
-            <button type="button">Feed</button>
-            <button class="main-check" id="bottom-check" type="button">Check in</button>
-            <button type="button">Rank</button>
-            <button type="button">Profile</button>
+          <section class="priority-section" aria-labelledby="pressure-title">
+            <div class="section-title">
+              <span class="label">Group pressure</span>
+              <h2 id="pressure-title">Who needs action?</h2>
+            </div>
+            <div class="priority-list">
+              <article class="priority-card">
+                <div class="priority-icon success" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="m5 12 4 4L19 6" />
+                  </svg>
+                </div>
+                <div>
+                  <strong>You are next</strong>
+                  <span>Push-up hold is waiting. Finish 2 more checks to keep your streak.</span>
+                </div>
+              </article>
+              <article class="priority-card danger">
+                <div class="priority-icon danger" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M12 8v5" />
+                    <path d="M12 17h.01" />
+                    <path d="M10.3 4.5 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.5a2 2 0 0 0-3.4 0Z" />
+                  </svg>
+                </div>
+                <div>
+                  <strong>Timothy is at risk</strong>
+                  <span>42 minutes left. Missed window adds EUR 10 to the pot.</span>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="trace-section" aria-labelledby="trace-title">
+            <div class="section-title row">
+              <div>
+                <span class="label">Trace protocol</span>
+                <h2 id="trace-title">Today</h2>
+              </div>
+              <button class="text-button" id="open-camera-secondary" type="button">Start</button>
+            </div>
+
+            <div class="exercise-list">
+              <button class="exercise-row done" type="button">
+                <span class="step-badge">01</span>
+                <span>
+                  <strong>Goblet squat</strong>
+                  <small>Depth and knee angle verified</small>
+                </span>
+                <em>Done</em>
+              </button>
+              <button class="exercise-row done" type="button">
+                <span class="step-badge">02</span>
+                <span>
+                  <strong>Romanian deadlift</strong>
+                  <small>Hip hinge path verified</small>
+                </span>
+                <em>Done</em>
+              </button>
+              <button class="exercise-row active" id="current-exercise-row" type="button">
+                <span class="step-badge">03</span>
+                <span>
+                  <strong id="next-exercise-label">Push-up hold</strong>
+                  <small id="next-exercise-copy">Need 10 clean seconds with shoulder lock</small>
+                </span>
+                <em>Live</em>
+              </button>
+              <button class="exercise-row locked" type="button">
+                <span class="step-badge">04</span>
+                <span>
+                  <strong>Walking lunge</strong>
+                  <small>Unlocks after step 3 is accepted</small>
+                </span>
+                <em>Locked</em>
+              </button>
+            </div>
+          </section>
+
+          <section class="integrity-section" aria-labelledby="integrity-title">
+            <div class="section-title">
+              <span class="label">Anti-cheat</span>
+              <h2 id="integrity-title">What counts</h2>
+            </div>
+            <div class="rule-list">
+              <article>
+                <strong>Live camera only</strong>
+                <span>No gallery uploads or old clips.</span>
+              </article>
+              <article>
+                <strong>Sequential exercises</strong>
+                <span>Each block unlocks the next one.</span>
+              </article>
+              <article>
+                <strong>Trace confidence</strong>
+                <span>Form, motion, and trust must pass.</span>
+              </article>
+            </div>
+          </section>
+
+          <section class="feed-section" aria-labelledby="feed-title">
+            <div class="section-title">
+              <span class="label">Live feed</span>
+              <h2 id="feed-title">Group updates</h2>
+            </div>
+            <div class="feed-list" id="feed-list">
+              <article class="feed-row good">
+                <div class="avatar">M</div>
+                <div>
+                  <strong>Mila finished all 4 blocks</strong>
+                  <span>Trace confidence 94%</span>
+                </div>
+                <small>now</small>
+              </article>
+              <article class="feed-row bad">
+                <div class="avatar danger">T</div>
+                <div>
+                  <strong>Timothy missed his window</strong>
+                  <span>EUR 10 added to the pot</span>
+                </div>
+                <small>14m</small>
+              </article>
+              <article class="feed-row">
+                <div class="avatar">L</div>
+                <div>
+                  <strong>Layo cleared step 3</strong>
+                  <span>Push-up hold accepted</span>
+                </div>
+                <small>22m</small>
+              </article>
+            </div>
+          </section>
+
+          <nav class="bottom-nav" aria-label="Main navigation">
+            <button class="active" type="button" aria-current="page">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 10.5 12 4l8 6.5V20H4z" />
+                <path d="M9 20v-6h6v6" />
+              </svg>
+              <span>Today</span>
+            </button>
+            <button type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M16 11a4 4 0 1 0-8 0" />
+                <path d="M3 20a7 7 0 0 1 18 0" />
+              </svg>
+              <span>Group</span>
+            </button>
+            <button class="primary-nav" id="nav-verify" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+              <span>Verify</span>
+            </button>
+            <button id="rank-nav" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 19V9" />
+                <path d="M12 19V5" />
+                <path d="M19 19v-7" />
+              </svg>
+              <span>Rank</span>
+            </button>
+            <button type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21a8 8 0 0 1 16 0" />
+              </svg>
+              <span>Profile</span>
+            </button>
           </nav>
         </section>
 
-        <section class="screen" id="camera">
-          <div class="camera-view">
-            <div class="recording-dot"></div>
-            <div class="camera-grid"></div>
-            <div class="camera-person"></div>
-            <p>Hold to record</p>
+        <section class="screen" id="screen-camera" aria-labelledby="camera-title">
+          <div class="camera-stage">
+            <div class="camera-bg"></div>
+            <header class="camera-top">
+              <button class="icon-button muted" id="back-home" type="button" aria-label="Back to today">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M15 18 9 12l6-6" />
+                </svg>
+              </button>
+              <div class="record-state" aria-label="Live camera trace is active">
+                <span class="record-dot"></span>
+                <strong>Live trace</strong>
+              </div>
+              <button class="icon-button muted" type="button" aria-label="Pause trace">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 6v12" />
+                  <path d="M15 6v12" />
+                </svg>
+              </button>
+            </header>
+
+            <div class="pose-skeleton" aria-hidden="true">
+              <span class="joint head"></span>
+              <span class="joint chest"></span>
+              <span class="joint hand-left"></span>
+              <span class="joint hand-right"></span>
+              <span class="joint hip"></span>
+              <span class="joint knee-left"></span>
+              <span class="joint knee-right"></span>
+              <span class="joint foot-left"></span>
+              <span class="joint foot-right"></span>
+              <span class="bone b1"></span>
+              <span class="bone b2"></span>
+              <span class="bone b3"></span>
+              <span class="bone b4"></span>
+              <span class="bone b5"></span>
+              <span class="bone b6"></span>
+              <span class="bone b7"></span>
+            </div>
+
+            <section class="trace-panel" aria-labelledby="camera-title">
+              <div class="trace-header">
+                <div>
+                  <span class="label" id="camera-step-label">Exercise 3 of 4</span>
+                  <h2 id="camera-title">Push-up hold</h2>
+                  <p>Hold clean form until this block is accepted.</p>
+                </div>
+                <div class="timer-wrap" aria-label="10 seconds required">
+                  <strong id="trace-timer">00:10</strong>
+                  <span>required</span>
+                </div>
+              </div>
+
+              <div class="trace-metrics" aria-label="Verification metrics">
+                <article>
+                  <span>Form</span>
+                  <strong id="form-score">88%</strong>
+                </article>
+                <article>
+                  <span>Motion</span>
+                  <strong id="motion-score">Live</strong>
+                </article>
+                <article>
+                  <span>Trust</span>
+                  <strong id="trust-score">92%</strong>
+                </article>
+              </div>
+
+              <div class="progress-cluster">
+                <div
+                  class="trace-bar"
+                  role="progressbar"
+                  aria-label="Current exercise trace progress"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow="52"
+                >
+                  <span id="trace-fill"></span>
+                </div>
+                <div class="trace-steps" id="trace-steps" aria-hidden="true">
+                  <span class="done"></span>
+                  <span class="done"></span>
+                  <span class="active"></span>
+                  <span></span>
+                </div>
+              </div>
+
+              <div class="trace-checklist" aria-label="Live trace checklist">
+                <div class="trace-line okay">Shoulders aligned</div>
+                <div class="trace-line okay">Rep path stable</div>
+                <div class="trace-line warning" id="angle-line">Lock elbow angle for 10 sec</div>
+              </div>
+            </section>
           </div>
+
           <div class="camera-actions">
-            <button class="ghost-button" id="close-camera" type="button">Cancel</button>
-            <button class="record-button" id="post-checkin" type="button" aria-label="Post check-in"></button>
-            <button class="ghost-button" type="button">Flip</button>
+            <button class="primary-button" id="simulate-verify" type="button">Verify this block</button>
+            <button class="secondary-button" id="switch-exercise" type="button">Advance trace</button>
           </div>
         </section>
 
-        <section class="screen" id="leaderboard">
-          <div class="topline">
-            <button class="ghost-button" id="back-home" type="button">Back</button>
-            <span class="eyebrow">This week</span>
-          </div>
-          <div class="page-title tight">
-            <h2>Leaderboard</h2>
-            <p>Consistency decides who levels up and who pays.</p>
-          </div>
+        <section class="screen" id="screen-rank" aria-labelledby="rank-title">
+          <header class="rank-top">
+            <button class="icon-button muted" id="close-rank" type="button" aria-label="Back to today">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 18 9 12l6-6" />
+              </svg>
+            </button>
+            <span class="label">Weekly leaderboard</span>
+          </header>
 
-          <ol class="leader-list">
+          <section class="rank-hero">
+            <h1 id="rank-title">Verified wins only</h1>
+            <p>Only full trace-approved workouts affect streaks, rank, and payouts.</p>
+          </section>
+
+          <section class="rank-summary" aria-label="Leaderboard summary">
+            <article>
+              <span>Winner pot</span>
+              <strong>EUR 140</strong>
+            </article>
+            <article>
+              <span>Your position</span>
+              <strong>#2</strong>
+            </article>
+          </section>
+
+          <ol class="leaderboard-list">
             <li>
-              <span class="place">1</span>
-              <strong>Mila</strong>
-              <span>7/7</span>
+              <span class="rank-pill">1</span>
+              <div>
+                <strong>Mila</strong>
+                <span>7 verified workouts</span>
+              </div>
+              <em>+28</em>
             </li>
-            <li class="you">
-              <span class="place">2</span>
-              <strong>You</strong>
-              <span id="you-score">6/7</span>
+            <li class="current-user">
+              <span class="rank-pill">2</span>
+              <div>
+                <strong>You</strong>
+                <span id="rank-user-status">6 verified workouts</span>
+              </div>
+              <em>+21</em>
             </li>
             <li>
-              <span class="place">3</span>
-              <strong>Layo</strong>
-              <span>5/7</span>
+              <span class="rank-pill">3</span>
+              <div>
+                <strong>Layo</strong>
+                <span>5 verified workouts</span>
+              </div>
+              <em>+16</em>
             </li>
-            <li class="weak">
-              <span class="place">4</span>
-              <strong>Timothy</strong>
-              <span>Weakest link</span>
+            <li class="weak-row">
+              <span class="rank-pill">4</span>
+              <div>
+                <strong>Timothy</strong>
+                <span>Missed an exercise window</span>
+              </div>
+              <em>-10</em>
             </li>
           </ol>
 
-          <div class="penalty-banner">
-            <span>Visible pressure</span>
-            <strong>Timothy missed. EUR 10 added.</strong>
-          </div>
+          <section class="penalty-callout" aria-labelledby="penalty-title">
+            <span class="label">Penalty logic</span>
+            <h2 id="penalty-title">Incomplete trace means no workout credit.</h2>
+            <p>The group sees the miss and EUR 10 moves into the weekly pot.</p>
+          </section>
         </section>
       </section>
     </main>
 
-    <script src="./script.js"></script>
+    <script src="./script.js?v=6"></script>
   </body>
 </html>
