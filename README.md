@@ -33,3 +33,10 @@ The preview URL will look like:
 ```text
 https://<username>.github.io/<repo-name>/
 ```
+
+To connect a new empty GitHub repository from this local folder:
+
+```bash
+git remote add origin https://github.com/<username>/<repo-name>.git
+git push -u origin main
+```
