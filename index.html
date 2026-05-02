@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Pressure is a mobile accountability fitness prototype where workouts count only after live camera exercise checks."
+    />
     <title>Pressure - Verified Workout Prototype</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -10,7 +14,11 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="./styles.css?v=6" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23050505'/%3E%3Cpath d='M18 34h28M32 20v28' stroke='%23d4ff00' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="./styles.css?v=7" />
   </head>
   <body>
     <main class="app-shell">
@@ -19,6 +27,7 @@
           <span>9:41</span>
           <span>Live</span>
         </div>
+        <p class="sr-only" id="live-status" aria-live="polite"></p>
 
         <section class="screen active" id="screen-home" aria-labelledby="home-title">
           <header class="app-header">
@@ -41,55 +50,134 @@
             </button>
           </header>
 
-          <section class="hero-card" aria-labelledby="home-title">
-            <div class="gym-visual" aria-hidden="true">
-              <span class="rack rack-one"></span>
-              <span class="rack rack-two"></span>
-              <span class="floor-line"></span>
-            </div>
-            <div class="hero-content">
-              <span class="label">Today before 22:00</span>
-              <h1 id="home-title">Finish 4 live checks</h1>
-              <p>Workout credit unlocks only after every exercise is verified by live camera trace.</p>
+          <section class="mission-card" aria-labelledby="home-title">
+            <div class="mission-media" aria-hidden="true"></div>
+            <div class="mission-content">
+              <div class="mission-topline">
+                <span class="label">Next action</span>
+                <span class="deadline-chip">22:00 deadline</span>
+              </div>
+              <h1 id="home-title">Start Push-up hold</h1>
+              <p id="mission-copy">
+                You have 2 checks left. Finish every live trace or today's workout does not count.
+              </p>
+
+              <div
+                class="step-progress"
+                id="home-progress"
+                role="progressbar"
+                aria-label="Workout verification progress"
+                aria-valuemin="0"
+                aria-valuemax="4"
+                aria-valuenow="2"
+              >
+                <span class="done"><b>1</b><small>Done</small></span>
+                <span class="done"><b>2</b><small>Done</small></span>
+                <span class="active"><b>3</b><small>Now</small></span>
+                <span><b>4</b><small>Next</small></span>
+              </div>
+
+              <div class="mission-facts" aria-label="What is at stake">
+                <article>
+                  <span>Penalty risk</span>
+                  <strong>EUR 10</strong>
+                </article>
+                <article>
+                  <span>Group sees</span>
+                  <strong>Misses</strong>
+                </article>
+              </div>
+
+              <button class="primary-button" id="open-camera" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                </svg>
+                <span id="main-cta-label">Start 10-sec trace</span>
+              </button>
             </div>
           </section>
 
-          <section class="status-card" aria-labelledby="today-status-title">
-            <div class="status-copy">
-              <span class="label">Current status</span>
-              <h2 id="today-status-title"><span id="today-checks">02 / 04</span> checks complete</h2>
-              <p id="next-task-copy">Next: Push-up hold. Hold clean form for 10 seconds.</p>
+          <section class="coach-card" aria-labelledby="coach-title">
+            <div class="section-title">
+              <span class="label">Before you tap start</span>
+              <h2 id="coach-title">Make the check count</h2>
+            </div>
+            <div class="coach-list">
+              <article>
+                <span class="coach-number">1</span>
+                <div>
+                  <strong>Full body in frame</strong>
+                  <small>The camera needs shoulders, hips, and feet visible.</small>
+                </div>
+              </article>
+              <article>
+                <span class="coach-number">2</span>
+                <div>
+                  <strong>Stay live for 10 sec</strong>
+                  <small>No gallery upload, no old clip, no cutaway.</small>
+                </div>
+              </article>
+              <article>
+                <span class="coach-number">3</span>
+                <div>
+                  <strong>Accept or retry</strong>
+                  <small>If trace confidence fails, the block stays open.</small>
+                </div>
+              </article>
+            </div>
+          </section>
+
+          <section class="trace-section" aria-labelledby="trace-title">
+            <div class="section-title row">
+              <div>
+                <span class="label">Today's protocol</span>
+                <h2 id="trace-title">4 checks to unlock credit</h2>
+              </div>
+              <button class="text-button" id="open-camera-secondary" type="button">Start</button>
             </div>
 
-            <div
-              class="segmented-progress"
-              id="home-progress"
-              role="progressbar"
-              aria-label="Workout verification progress"
-              aria-valuemin="0"
-              aria-valuemax="4"
-              aria-valuenow="2"
-            >
-              <span class="complete"></span>
-              <span class="complete"></span>
-              <span class="current"></span>
-              <span></span>
+            <div class="exercise-list">
+              <button class="exercise-row done" type="button" aria-label="Goblet squat done">
+                <span class="step-badge">01</span>
+                <span>
+                  <strong>Goblet squat</strong>
+                  <small>Depth and knee angle verified</small>
+                </span>
+                <em>Done</em>
+              </button>
+              <button class="exercise-row done" type="button" aria-label="Romanian deadlift done">
+                <span class="step-badge">02</span>
+                <span>
+                  <strong>Romanian deadlift</strong>
+                  <small>Hip hinge path verified</small>
+                </span>
+                <em>Done</em>
+              </button>
+              <button class="exercise-row active" id="current-exercise-row" type="button">
+                <span class="step-badge">03</span>
+                <span>
+                  <strong id="next-exercise-label">Push-up hold</strong>
+                  <small id="next-exercise-copy">Need 10 clean seconds with shoulder lock</small>
+                </span>
+                <em>Start</em>
+              </button>
+              <button class="exercise-row locked" type="button" aria-label="Walking lunge locked">
+                <span class="step-badge">04</span>
+                <span>
+                  <strong>Walking lunge</strong>
+                  <small>Unlocks after step 3 is accepted</small>
+                </span>
+                <em>Locked</em>
+              </button>
             </div>
-
-            <button class="primary-button" id="open-camera" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 5v14" />
-                <path d="M5 12h14" />
-              </svg>
-              Start live check
-            </button>
           </section>
 
           <section class="stats-grid" aria-label="Accountability stats">
             <article>
               <span>Streak</span>
               <strong id="streak-value">11</strong>
-              <small>days</small>
+              <small>days protected</small>
             </article>
             <article>
               <span>Penalty pot</span>
@@ -111,7 +199,7 @@
           <section class="priority-section" aria-labelledby="pressure-title">
             <div class="section-title">
               <span class="label">Group pressure</span>
-              <h2 id="pressure-title">Who needs action?</h2>
+              <h2 id="pressure-title">Needs attention</h2>
             </div>
             <div class="priority-list">
               <article class="priority-card">
@@ -121,8 +209,8 @@
                   </svg>
                 </div>
                 <div>
-                  <strong>You are next</strong>
-                  <span>Push-up hold is waiting. Finish 2 more checks to keep your streak.</span>
+                  <strong>You are up next</strong>
+                  <span>Finish 2 more checks to keep the workout valid.</span>
                 </div>
               </article>
               <article class="priority-card danger">
@@ -135,74 +223,8 @@
                 </div>
                 <div>
                   <strong>Timothy is at risk</strong>
-                  <span>42 minutes left. Missed window adds EUR 10 to the pot.</span>
+                  <span>42 minutes left. If he misses, EUR 10 moves to the pot.</span>
                 </div>
-              </article>
-            </div>
-          </section>
-
-          <section class="trace-section" aria-labelledby="trace-title">
-            <div class="section-title row">
-              <div>
-                <span class="label">Trace protocol</span>
-                <h2 id="trace-title">Today</h2>
-              </div>
-              <button class="text-button" id="open-camera-secondary" type="button">Start</button>
-            </div>
-
-            <div class="exercise-list">
-              <button class="exercise-row done" type="button">
-                <span class="step-badge">01</span>
-                <span>
-                  <strong>Goblet squat</strong>
-                  <small>Depth and knee angle verified</small>
-                </span>
-                <em>Done</em>
-              </button>
-              <button class="exercise-row done" type="button">
-                <span class="step-badge">02</span>
-                <span>
-                  <strong>Romanian deadlift</strong>
-                  <small>Hip hinge path verified</small>
-                </span>
-                <em>Done</em>
-              </button>
-              <button class="exercise-row active" id="current-exercise-row" type="button">
-                <span class="step-badge">03</span>
-                <span>
-                  <strong id="next-exercise-label">Push-up hold</strong>
-                  <small id="next-exercise-copy">Need 10 clean seconds with shoulder lock</small>
-                </span>
-                <em>Live</em>
-              </button>
-              <button class="exercise-row locked" type="button">
-                <span class="step-badge">04</span>
-                <span>
-                  <strong>Walking lunge</strong>
-                  <small>Unlocks after step 3 is accepted</small>
-                </span>
-                <em>Locked</em>
-              </button>
-            </div>
-          </section>
-
-          <section class="integrity-section" aria-labelledby="integrity-title">
-            <div class="section-title">
-              <span class="label">Anti-cheat</span>
-              <h2 id="integrity-title">What counts</h2>
-            </div>
-            <div class="rule-list">
-              <article>
-                <strong>Live camera only</strong>
-                <span>No gallery uploads or old clips.</span>
-              </article>
-              <article>
-                <strong>Sequential exercises</strong>
-                <span>Each block unlocks the next one.</span>
-              </article>
-              <article>
-                <strong>Trace confidence</strong>
-                <span>Form, motion, and trust must pass.</span>
               </article>
             </div>
           </section>
@@ -241,7 +263,7 @@
           </section>
 
           <nav class="bottom-nav" aria-label="Main navigation">
-            <button class="active" type="button" aria-current="page">
+            <button class="active" data-nav="home" type="button" aria-current="page">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M4 10.5 12 4l8 6.5V20H4z" />
                 <path d="M9 20v-6h6v6" />
@@ -262,7 +284,7 @@
               </svg>
               <span>Verify</span>
             </button>
-            <button id="rank-nav" type="button">
+            <button id="rank-nav" data-nav="rank" type="button">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 19V9" />
                 <path d="M12 19V5" />
@@ -282,7 +304,6 @@
 
         <section class="screen" id="screen-camera" aria-labelledby="camera-title">
           <div class="camera-stage">
-            <div class="camera-bg"></div>
             <header class="camera-top">
               <button class="icon-button muted" id="back-home" type="button" aria-label="Back to today">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -300,6 +321,12 @@
                 </svg>
               </button>
             </header>
+
+            <div class="camera-coach" aria-label="Camera setup instruction">
+              <span class="label" id="camera-step-label">Exercise 3 of 4</span>
+              <h2 id="camera-title">Push-up hold</h2>
+              <p id="camera-instruction">Keep shoulders and hips visible. Hold steady until the trace turns complete.</p>
+            </div>
 
             <div class="pose-skeleton" aria-hidden="true">
               <span class="joint head"></span>
@@ -320,32 +347,17 @@
               <span class="bone b7"></span>
             </div>
 
-            <section class="trace-panel" aria-labelledby="camera-title">
+            <section class="trace-panel" aria-labelledby="trace-panel-title">
               <div class="trace-header">
                 <div>
-                  <span class="label" id="camera-step-label">Exercise 3 of 4</span>
-                  <h2 id="camera-title">Push-up hold</h2>
-                  <p>Hold clean form until this block is accepted.</p>
+                  <span class="label">Acceptance rule</span>
+                  <h2 id="trace-panel-title">10 clean seconds</h2>
+                  <p id="trace-hint">The block only counts when form, motion, and live trust stay stable.</p>
                 </div>
                 <div class="timer-wrap" aria-label="10 seconds required">
                   <strong id="trace-timer">00:10</strong>
                   <span>required</span>
                 </div>
-              </div>
-
-              <div class="trace-metrics" aria-label="Verification metrics">
-                <article>
-                  <span>Form</span>
-                  <strong id="form-score">88%</strong>
-                </article>
-                <article>
-                  <span>Motion</span>
-                  <strong id="motion-score">Live</strong>
-                </article>
-                <article>
-                  <span>Trust</span>
-                  <strong id="trust-score">92%</strong>
-                </article>
               </div>
 
               <div class="progress-cluster">
@@ -367,17 +379,32 @@
                 </div>
               </div>
 
+              <div class="trace-metrics" aria-label="Verification metrics">
+                <article>
+                  <span>Form</span>
+                  <strong id="form-score">88%</strong>
+                </article>
+                <article>
+                  <span>Motion</span>
+                  <strong id="motion-score">Live</strong>
+                </article>
+                <article>
+                  <span>Trust</span>
+                  <strong id="trust-score">92%</strong>
+                </article>
+              </div>
+
               <div class="trace-checklist" aria-label="Live trace checklist">
-                <div class="trace-line okay">Shoulders aligned</div>
+                <div class="trace-line okay">Full body visible</div>
                 <div class="trace-line okay">Rep path stable</div>
-                <div class="trace-line warning" id="angle-line">Lock elbow angle for 10 sec</div>
+                <div class="trace-line warning" id="angle-line">Lock shoulder angle for 10 sec</div>
               </div>
             </section>
           </div>
 
           <div class="camera-actions">
-            <button class="primary-button" id="simulate-verify" type="button">Verify this block</button>
-            <button class="secondary-button" id="switch-exercise" type="button">Advance trace</button>
+            <button class="primary-button" id="simulate-verify" type="button">Accept this block</button>
+            <button class="secondary-button" id="switch-exercise" type="button">Scan form again</button>
           </div>
         </section>
 
@@ -448,9 +475,44 @@
             <p>The group sees the miss and EUR 10 moves into the weekly pot.</p>
           </section>
         </section>
+
+        <section class="screen success-screen" id="screen-success" aria-labelledby="success-title">
+          <header class="success-top">
+            <button class="icon-button muted" id="success-home" type="button" aria-label="Back to today">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 18 9 12l6-6" />
+              </svg>
+            </button>
+          </header>
+
+          <section class="success-card">
+            <span class="success-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="m5 12 4 4L19 6" />
+              </svg>
+            </span>
+            <span class="label">Workout counted</span>
+            <h1 id="success-title">All 4 checks passed</h1>
+            <p>Your streak is protected and the group feed now shows the verified workout.</p>
+
+            <div class="success-summary">
+              <article>
+                <span>Streak</span>
+                <strong id="success-streak">12 days</strong>
+              </article>
+              <article>
+                <span>Penalty</span>
+                <strong>EUR 0</strong>
+              </article>
+            </div>
+
+            <button class="primary-button" id="success-rank" type="button">View leaderboard</button>
+            <button class="secondary-button" id="success-back" type="button">Back to today</button>
+          </section>
+        </section>
       </section>
     </main>
 
-    <script src="./script.js?v=6"></script>
+    <script src="./script.js?v=7"></script>
   </body>
 </html>

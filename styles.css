@@ -2,24 +2,23 @@
   color-scheme: dark;
   --bg: #050505;
   --surface: #121212;
-  --surface-2: #1a1a1a;
+  --surface-2: #191919;
   --surface-3: #242424;
   --line: #2c2c2c;
   --line-soft: rgba(255, 255, 255, 0.08);
-  --text: #f4f4ef;
-  --muted: #c5c9ac;
-  --muted-2: #8f9378;
+  --text: #f7f7f0;
+  --muted: #d0d4bd;
+  --muted-2: #91977e;
   --lime: #d4ff00;
-  --lime-dim: #a8cc00;
+  --lime-soft: rgba(212, 255, 0, 0.14);
   --lavender: #b8a9ff;
   --danger: #ff5c5c;
-  --danger-bg: rgba(255, 92, 92, 0.13);
+  --danger-bg: rgba(255, 92, 92, 0.14);
   --success: #7ff0a7;
-  --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 18px;
   --radius-xl: 24px;
-  --shadow-glow: 0 0 38px rgba(212, 255, 0, 0.08);
+  --shadow-glow: 0 0 42px rgba(212, 255, 0, 0.1);
 }
 
 * {
@@ -33,8 +32,8 @@ body {
   margin: 0;
   overflow: hidden;
   background:
-    radial-gradient(circle at top left, rgba(184, 169, 255, 0.16), transparent 28rem),
-    radial-gradient(circle at bottom right, rgba(212, 255, 0, 0.12), transparent 24rem),
+    radial-gradient(circle at top left, rgba(184, 169, 255, 0.12), transparent 28rem),
+    radial-gradient(circle at bottom right, rgba(212, 255, 0, 0.1), transparent 24rem),
     #080808;
   color: var(--text);
   font-family:
@@ -47,6 +46,7 @@ button {
   color: inherit;
   font: inherit;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 button:focus-visible {
@@ -63,6 +63,15 @@ svg {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2.25;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .app-shell {
@@ -96,7 +105,7 @@ svg {
   align-items: center;
   height: 44px;
   padding: 12px 20px 0;
-  color: rgba(255, 255, 255, 0.86);
+  color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
   font-weight: 800;
   pointer-events: none;
@@ -121,13 +130,13 @@ svg {
 
 .screen.active {
   display: flex;
-  animation: screenIn 220ms ease both;
+  animation: screenIn 180ms ease both;
 }
 
 @keyframes screenIn {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
 
   to {
@@ -140,6 +149,7 @@ svg {
 .camera-top,
 .rank-top {
   display: grid;
+  flex: 0 0 auto;
   grid-template-columns: 44px minmax(0, 1fr) 44px;
   align-items: center;
   gap: 12px;
@@ -180,8 +190,7 @@ svg {
   background: rgba(255, 255, 255, 0.08);
 }
 
-.label,
-.metric-label {
+.label {
   display: block;
   color: var(--lime);
   font-size: 11px;
@@ -191,152 +200,170 @@ svg {
   text-transform: uppercase;
 }
 
-.hero-card {
+.mission-card {
   position: relative;
-  --hero-image: url("./assets/trace-athlete-lunge.jpg");
-  min-height: 184px;
+  flex: 0 0 auto;
   margin: 0 18px;
   overflow: hidden;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(212, 255, 0, 0.28);
   border-radius: var(--radius-xl);
   background:
-    linear-gradient(90deg, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.62) 48%, rgba(0, 0, 0, 0.15) 100%),
-    radial-gradient(circle at 78% 28%, rgba(212, 255, 0, 0.2), transparent 7rem),
-    linear-gradient(135deg, #06100c, #131313 48%, #28302b);
+    linear-gradient(180deg, rgba(6, 6, 6, 0.9), rgba(6, 6, 6, 0.72)),
+    var(--surface);
   box-shadow: var(--shadow-glow);
 }
 
-.hero-card::before {
+.mission-media {
   position: absolute;
   inset: 0;
-  content: "";
-  background-image: var(--hero-image, none);
-  background-position: 68% 48%;
-  background-size: cover;
-  opacity: 0.44;
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, 0.94) 0%, rgba(0, 0, 0, 0.72) 52%, rgba(0, 0, 0, 0.34) 100%),
+    url("./assets/trace-athlete-lunge.jpg") 68% 48% / cover;
+  opacity: 0.58;
 }
 
-.gym-visual {
-  position: absolute;
-  inset: 0;
-  opacity: 0.6;
-}
-
-.rack {
-  position: absolute;
-  top: 24px;
-  bottom: 20px;
-  width: 2px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, transparent, rgba(212, 255, 0, 0.5), transparent);
-}
-
-.rack-one {
-  right: 88px;
-}
-
-.rack-two {
-  right: 46px;
-}
-
-.floor-line {
-  position: absolute;
-  right: 0;
-  bottom: 38px;
-  width: 54%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34));
-  transform: rotate(-12deg);
-  transform-origin: right center;
-}
-
-.hero-content {
+.mission-content {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 8px;
-  width: min(72%, 270px);
-  padding: 22px;
+  gap: 14px;
+  padding: 20px;
 }
 
-.hero-content h1,
-.status-card h2,
-.section-title h2,
+.mission-topline,
+.section-title.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.deadline-chip {
+  min-height: 30px;
+  padding: 7px 10px;
+  border: 1px solid rgba(212, 255, 0, 0.32);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.36);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.mission-card h1,
 .rank-hero h1,
-.trace-header h2,
-.penalty-callout h2 {
+.success-card h1 {
   margin: 0;
-  line-height: 1;
   letter-spacing: 0;
 }
 
-.hero-content h1 {
-  font-size: 34px;
+.mission-card h1 {
+  max-width: 280px;
+  font-size: 37px;
   font-weight: 900;
+  line-height: 0.95;
 }
 
-.hero-content p,
-.status-card p,
+.mission-card p,
+.camera-coach p,
+.trace-header p,
 .rank-hero p,
 .penalty-callout p,
-.trace-header p {
+.success-card p {
   margin: 0;
   color: var(--muted);
   font-size: 14px;
   line-height: 1.45;
 }
 
-.status-card,
-.priority-card,
-.trace-section,
-.integrity-section,
-.feed-section,
-.rank-summary,
-.penalty-callout {
-  border: 1px solid var(--line);
-  background: var(--surface);
-}
-
-.status-card {
-  display: grid;
-  gap: 16px;
-  margin: 14px 18px 0;
-  padding: 18px;
-  border-radius: var(--radius-xl);
-}
-
-.status-copy {
-  display: grid;
-  gap: 7px;
-}
-
-.status-card h2 {
-  font-size: 25px;
-  font-weight: 850;
-}
-
-.segmented-progress,
-.trace-steps {
+.step-progress {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
-.segmented-progress span,
-.trace-steps span {
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.13);
+.step-progress span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  min-height: 58px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--muted);
 }
 
-.segmented-progress .complete,
-.trace-steps .done {
+.step-progress b {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.step-progress small {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.step-progress .done {
+  border-color: rgba(212, 255, 0, 0.28);
+  color: var(--lime);
+}
+
+.step-progress .done b,
+.step-progress .active b {
   background: var(--lime);
+  color: #111600;
 }
 
-.segmented-progress .current,
-.trace-steps .active {
-  background: var(--lavender);
+.step-progress .active {
+  border-color: rgba(184, 169, 255, 0.58);
+  background: rgba(184, 169, 255, 0.14);
+  color: var(--text);
+}
+
+.mission-facts,
+.success-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mission-facts article,
+.success-summary article {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.mission-facts span,
+.success-summary span,
+.stats-grid span,
+.rank-summary span,
+.trace-metrics span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mission-facts strong,
+.success-summary strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+  line-height: 1.1;
 }
 
 .primary-button,
@@ -363,55 +390,21 @@ svg {
   color: var(--text);
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  padding: 14px 18px 0;
-}
-
-.stats-grid article,
-.rank-summary article {
-  min-width: 0;
-  padding: 15px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
-}
-
-.stats-grid span,
-.rank-summary span,
-.trace-metrics span {
-  display: block;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.stats-grid strong,
-.rank-summary strong {
-  display: block;
-  margin: 5px 0 2px;
-  overflow-wrap: anywhere;
-  font-size: 24px;
-  line-height: 1.1;
-}
-
-.stats-grid small,
-.exercise-row small,
-.priority-card span,
-.rule-list span,
-.feed-row span,
-.leaderboard-list span {
-  color: var(--muted);
-  line-height: 1.35;
-}
-
-.priority-section,
+.coach-card,
 .trace-section,
-.integrity-section,
+.priority-section,
 .feed-section {
-  margin: 18px 18px 0;
+  flex: 0 0 auto;
+  margin: 16px 18px 0;
+}
+
+.coach-card,
+.trace-section,
+.feed-section {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
 }
 
 .section-title {
@@ -420,65 +413,62 @@ svg {
   margin-bottom: 12px;
 }
 
-.section-title.row {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-}
-
 .section-title h2 {
-  font-size: 24px;
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.05;
+  letter-spacing: 0;
 }
 
-.priority-list,
+.coach-list,
 .exercise-list,
-.rule-list,
+.priority-list,
 .feed-list {
   display: grid;
   gap: 10px;
 }
 
-.priority-card {
+.coach-list article {
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr);
   gap: 12px;
-  align-items: center;
-  min-height: 78px;
-  padding: 14px;
-  border-radius: var(--radius-lg);
+  align-items: start;
+  min-height: 62px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.055);
 }
 
-.priority-card.danger {
-  border-color: rgba(255, 92, 92, 0.3);
-  background:
-    linear-gradient(135deg, var(--danger-bg), transparent 70%),
-    var(--surface);
+.coach-number,
+.step-badge,
+.rank-pill {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
 }
 
-.priority-card strong {
+.coach-list strong,
+.exercise-row strong,
+.priority-card strong,
+.feed-row strong,
+.leaderboard-list strong {
   display: block;
   margin-bottom: 4px;
 }
 
-.priority-icon {
-  display: grid;
-  width: 42px;
-  height: 42px;
-  place-items: center;
-  border-radius: 14px;
-  background: rgba(212, 255, 0, 0.12);
-  color: var(--lime);
-}
-
-.priority-icon.danger {
-  background: var(--danger-bg);
-  color: var(--danger);
-}
-
-.trace-section,
-.integrity-section,
-.feed-section {
-  padding: 16px;
-  border-radius: var(--radius-xl);
+.coach-list small,
+.exercise-row small,
+.priority-card span,
+.feed-row span,
+.leaderboard-list span {
+  color: var(--muted);
+  line-height: 1.35;
 }
 
 .text-button {
@@ -504,12 +494,6 @@ svg {
   text-align: left;
 }
 
-.exercise-row strong {
-  display: block;
-  margin-bottom: 3px;
-  font-size: 16px;
-}
-
 .exercise-row em {
   justify-self: end;
   padding: 5px 8px;
@@ -526,7 +510,7 @@ svg {
 }
 
 .exercise-row.done em {
-  background: rgba(212, 255, 0, 0.12);
+  background: var(--lime-soft);
   color: var(--lime);
 }
 
@@ -542,36 +526,69 @@ svg {
   color: var(--lavender);
 }
 
-.step-badge,
-.rank-pill {
+.stats-grid {
   display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 900;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px 18px 0;
 }
 
-.rule-list {
-  grid-template-columns: 1fr;
+.stats-grid article,
+.rank-summary article {
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
 }
 
-.rule-list article {
-  padding: 13px 0;
-  border-top: 1px solid var(--line-soft);
-}
-
-.rule-list article:first-child {
-  border-top: 0;
-  padding-top: 0;
-}
-
-.rule-list strong {
+.stats-grid strong,
+.rank-summary strong {
   display: block;
-  margin-bottom: 4px;
+  margin: 5px 0 2px;
+  overflow-wrap: anywhere;
+  font-size: 23px;
+  line-height: 1.1;
+}
+
+.stats-grid small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.priority-card {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 78px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.priority-card.danger {
+  border-color: rgba(255, 92, 92, 0.3);
+  background:
+    linear-gradient(135deg, var(--danger-bg), transparent 70%),
+    var(--surface);
+}
+
+.priority-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--lime-soft);
+  color: var(--lime);
+}
+
+.priority-icon.danger {
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .feed-section {
@@ -584,11 +601,6 @@ svg {
   gap: 12px;
   align-items: center;
   min-height: 66px;
-}
-
-.feed-row strong {
-  display: block;
-  margin-bottom: 4px;
 }
 
 .feed-row small {
@@ -631,7 +643,7 @@ svg {
   padding: 8px;
   border: 1px solid var(--line);
   border-radius: 24px;
-  background: rgba(14, 14, 14, 0.9);
+  background: rgba(14, 14, 14, 0.92);
   backdrop-filter: blur(24px);
 }
 
@@ -672,31 +684,25 @@ svg {
 
 .camera-stage {
   position: relative;
-  --camera-image: url("./assets/trace-athlete-lunge.jpg");
   flex: 1;
   min-height: 0;
   overflow: hidden;
   padding: 0 16px 16px;
   background:
-    linear-gradient(180deg, rgba(210, 215, 216, 0.44), rgba(11, 12, 13, 0.96)),
-    var(--camera-image, linear-gradient(160deg, #c8cccc, #777c80 32%, #1e2226 72%, #101112));
-  background-position: center top;
-  background-size: cover;
+    linear-gradient(180deg, rgba(210, 215, 216, 0.34), rgba(8, 9, 10, 0.98)),
+    url("./assets/trace-athlete-lunge.jpg") center top / cover;
 }
 
 .camera-stage::before {
   position: absolute;
   inset: 0;
   content: "";
-  background-image: var(--camera-image, none);
-  background-position: center top;
-  background-size: cover;
-  opacity: 0.18;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.58));
 }
 
 .camera-top {
   position: relative;
-  z-index: 3;
+  z-index: 4;
   padding-right: 0;
   padding-left: 0;
 }
@@ -709,7 +715,7 @@ svg {
   min-height: 40px;
   padding: 0 14px;
   border-radius: 999px;
-  background: rgba(18, 18, 18, 0.64);
+  background: rgba(18, 18, 18, 0.68);
   backdrop-filter: blur(20px);
 }
 
@@ -721,9 +727,33 @@ svg {
   box-shadow: 0 0 0 6px rgba(255, 92, 92, 0.2);
 }
 
+.camera-coach {
+  position: relative;
+  z-index: 3;
+  max-width: 292px;
+  margin-top: 8px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  background: rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(20px);
+}
+
+.camera-coach h2,
+.trace-header h2 {
+  margin: 4px 0 0;
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.camera-coach p {
+  margin-top: 8px;
+}
+
 .pose-skeleton {
   position: absolute;
-  inset: 132px 46px 292px;
+  inset: 188px 46px 310px;
   z-index: 1;
 }
 
@@ -853,13 +883,13 @@ svg {
   left: 16px;
   z-index: 4;
   display: grid;
-  gap: 14px;
+  gap: 13px;
   width: calc(100% - 32px);
   max-width: calc(100% - 32px);
-  padding: 18px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: 28px;
-  background: rgba(10, 10, 10, 0.9);
+  background: rgba(10, 10, 10, 0.92);
   backdrop-filter: blur(24px);
 }
 
@@ -868,15 +898,6 @@ svg {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
   align-items: start;
-}
-
-.trace-header h2 {
-  margin-top: 5px;
-  font-size: 30px;
-}
-
-.trace-header p {
-  margin-top: 8px;
 }
 
 .timer-wrap {
@@ -895,6 +916,44 @@ svg {
   font-size: 10px;
   font-weight: 900;
   text-transform: uppercase;
+}
+
+.trace-bar {
+  width: 100%;
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.trace-bar span {
+  display: block;
+  width: 52%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--lavender), var(--lime));
+  transition: width 220ms ease;
+}
+
+.trace-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 7px;
+}
+
+.trace-steps span {
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.trace-steps .done {
+  background: var(--lime);
+}
+
+.trace-steps .active {
+  background: var(--lavender);
 }
 
 .trace-metrics {
@@ -916,31 +975,14 @@ svg {
   font-size: 17px;
 }
 
-.trace-bar {
-  width: 100%;
-  height: 9px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.trace-bar span {
-  display: block;
-  width: 52%;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--lavender), var(--lime));
-  transition: width 220ms ease;
-}
-
 .trace-checklist {
   display: grid;
   gap: 8px;
 }
 
 .trace-line {
-  min-height: 42px;
-  padding: 11px 13px;
+  min-height: 40px;
+  padding: 10px 13px;
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.06);
   line-height: 1.3;
@@ -991,13 +1033,6 @@ svg {
   line-height: 0.96;
 }
 
-.rank-hero p {
-  max-width: 310px;
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.45;
-}
-
 .rank-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1025,11 +1060,6 @@ svg {
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   background: var(--surface);
-}
-
-.leaderboard-list strong {
-  display: block;
-  margin-bottom: 4px;
 }
 
 .leaderboard-list em {
@@ -1062,6 +1092,7 @@ svg {
   margin-top: auto;
   margin-bottom: 18px;
   padding: 16px 18px;
+  border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   background:
     linear-gradient(135deg, rgba(255, 92, 92, 0.18), transparent 70%),
@@ -1069,8 +1100,48 @@ svg {
 }
 
 .penalty-callout h2 {
+  margin: 0;
   font-size: 18px;
   line-height: 1.2;
+}
+
+.success-screen {
+  justify-content: center;
+  padding: 54px 18px 22px;
+}
+
+.success-top {
+  position: absolute;
+  top: 54px;
+  left: 18px;
+}
+
+.success-card {
+  display: grid;
+  gap: 15px;
+  padding: 22px;
+  border: 1px solid rgba(212, 255, 0, 0.32);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 82% 16%, rgba(212, 255, 0, 0.2), transparent 8rem),
+    var(--surface);
+  box-shadow: var(--shadow-glow);
+}
+
+.success-mark {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border-radius: 20px;
+  background: var(--lime);
+  color: #111600;
+}
+
+.success-card h1 {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 0.98;
 }
 
 @media (max-width: 520px) {
@@ -1104,24 +1175,43 @@ svg {
     max-width: 100vw;
   }
 
-  .hero-content h1 {
+  .mission-card h1 {
+    font-size: 34px;
+  }
+
+  .camera-coach h2,
+  .trace-header h2 {
+    font-size: 25px;
+  }
+
+  .rank-hero h1,
+  .success-card h1 {
+    font-size: 38px;
+  }
+}
+
+@media (max-width: 374px) {
+  .mission-content,
+  .coach-card,
+  .trace-section,
+  .feed-section,
+  .trace-panel {
+    padding: 14px;
+  }
+
+  .mission-card h1 {
     font-size: 31px;
   }
 
-  .status-card h2 {
-    font-size: 23px;
+  .step-progress small,
+  .bottom-nav button {
+    font-size: 10px;
   }
 
-  .stats-grid strong {
-    font-size: 22px;
-  }
-
-  .trace-header h2 {
-    font-size: 27px;
-  }
-
-  .timer-wrap strong {
-    font-size: 27px;
+  .trace-metrics,
+  .mission-facts,
+  .success-summary {
+    gap: 7px;
   }
 }
 
