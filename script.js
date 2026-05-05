@@ -13,6 +13,19 @@ const state = {
   tracePercent: 52,
   trust: 92,
   form: 88,
+  visionMode: "demo",
+};
+
+const vision = {
+  endpoint:
+    window.PRESSURE_VISION_ENDPOINT ||
+    localStorage.getItem("pressureVisionEndpoint") ||
+    "",
+  stream: null,
+  timer: null,
+  raf: null,
+  lastDetections: [],
+  lastFrameAt: 0,
 };
 
 const exercises = [
@@ -68,6 +81,10 @@ function showScreen(name) {
   }
 
   setLiveStatus(`${name} screen opened`);
+
+  if (name === "camera") {
+    startVision();
+  }
 }
 
 function renderHomeProgress(count) {
@@ -159,6 +176,7 @@ function updateCamera() {
   document.querySelector(".trace-bar").setAttribute("aria-valuenow", String(state.tracePercent));
   document.querySelector("#angle-line").textContent = current.lock;
   renderTraceSteps();
+  updateVisionUI(vision.lastDetections);
 }
 
 function addFeedItem(title, subtitle, tone = "") {
@@ -182,6 +200,209 @@ function openCamera() {
     return;
   }
   showScreen("camera");
+}
+
+function normalizeDetections(payload) {
+  const source = Array.isArray(payload)
+    ? payload
+    : payload?.detections || payload?.predictions || [];
+
+  return source
+    .map((item) => {
+      const label = item.label || item.class || item.class_name || item.name || "object";
+      const confidence = Number(item.confidence ?? item.score ?? 0.8);
+      const box = item.box || item.bbox || item.xyxy || item;
+
+      let x = Number(box.x ?? box.left ?? box[0] ?? 0.32);
+      let y = Number(box.y ?? box.top ?? box[1] ?? 0.22);
+      let width = Number(box.width ?? box.w ?? ((box[2] ?? 0.78) - x));
+      let height = Number(box.height ?? box.h ?? ((box[3] ?? 0.84) - y));
+
+      if (x > 1 || y > 1 || width > 1 || height > 1) {
+        const canvas = document.querySelector("#vision-overlay");
+        x /= canvas.width || 390;
+        y /= canvas.height || 844;
+        width /= canvas.width || 390;
+        height /= canvas.height || 844;
+      }
+
+      return { label, confidence, x, y, width, height };
+    })
+    .filter((item) => item.confidence >= 0.35);
+}
+
+function demoDetections() {
+  const current = exercises[state.activeExerciseIndex] ?? exercises[3];
+  return [
+    { label: "person", confidence: 0.96, x: 0.27, y: 0.22, width: 0.46, height: 0.62 },
+    { label: "full body", confidence: current.title === "Walking lunge" ? 0.89 : 0.91, x: 0.2, y: 0.18, width: 0.6, height: 0.72 },
+    { label: current.title.toLowerCase(), confidence: 0.86, x: 0.3, y: 0.35, width: 0.4, height: 0.38 },
+  ];
+}
+
+function detectionLabel(detection) {
+  return `${detection.label} ${Math.round(detection.confidence * 100)}%`;
+}
+
+function updateVisionUI(detections = []) {
+  const status = document.querySelector("#vision-status");
+  const tags = document.querySelector("#vision-tags");
+  const summary = document.querySelector("#vision-summary");
+  if (!status || !tags || !summary) return;
+
+  const detected = detections.length ? detections : demoDetections();
+  const hasPerson = detected.some((item) => item.label.toLowerCase().includes("person"));
+  const hasBody = detected.some((item) => item.label.toLowerCase().includes("body"));
+  const mode = state.visionMode === "rfdetr" ? "RF-DETR live" : "Demo vision";
+
+  status.className = "vision-status";
+  if (hasPerson && hasBody) status.classList.add("live");
+  if (!hasPerson) status.classList.add("warning");
+  status.textContent = mode;
+
+  tags.replaceChildren(
+    ...detected.slice(0, 4).map((item) => {
+      const tag = document.createElement("span");
+      tag.textContent = detectionLabel(item);
+      return tag;
+    }),
+  );
+
+  summary.textContent =
+    hasPerson && hasBody
+      ? "Person and full-body frame are visible. Trace can evaluate this block."
+      : "Move back until your full body is visible before accepting the block.";
+
+  document.querySelector("#form-score").textContent = hasBody ? `${state.form}%` : "Hold";
+  document.querySelector("#trust-score").textContent = hasPerson ? `${state.trust}%` : "Low";
+}
+
+function drawVisionOverlay(detections = []) {
+  const canvas = document.querySelector("#vision-overlay");
+  if (!canvas) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = Math.round(rect.width * scale);
+  canvas.height = Math.round(rect.height * scale);
+
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.scale(scale, scale);
+
+  detections.forEach((detection) => {
+    const x = detection.x * rect.width;
+    const y = detection.y * rect.height;
+    const width = detection.width * rect.width;
+    const height = detection.height * rect.height;
+    const label = detectionLabel(detection);
+
+    ctx.strokeStyle = detection.label.includes("person") ? "#d4ff00" : "#b8a9ff";
+    ctx.lineWidth = 2;
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = 10;
+    ctx.strokeRect(x, y, width, height);
+
+    ctx.shadowBlur = 0;
+    ctx.font = "800 11px Inter, sans-serif";
+    const labelWidth = ctx.measureText(label).width + 14;
+    ctx.fillStyle = "rgba(5, 5, 5, 0.82)";
+    ctx.fillRect(x, Math.max(8, y - 26), labelWidth, 22);
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.fillText(label, x + 7, Math.max(23, y - 10));
+  });
+
+  ctx.restore();
+}
+
+function drawVisionLoop() {
+  const detections = vision.lastDetections.length ? vision.lastDetections : demoDetections();
+  drawVisionOverlay(detections);
+  vision.raf = requestAnimationFrame(drawVisionLoop);
+}
+
+function captureFrame() {
+  const video = document.querySelector("#camera-video");
+  if (!video || video.readyState < 2) return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = 384;
+  canvas.height = 384;
+  const context = canvas.getContext("2d");
+  context.drawImage(video, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.72);
+}
+
+async function detectFrame() {
+  if (!vision.endpoint) {
+    state.visionMode = "demo";
+    vision.lastDetections = demoDetections();
+    updateVisionUI(vision.lastDetections);
+    return;
+  }
+
+  const image = captureFrame();
+  if (!image) return;
+
+  try {
+    const response = await fetch(vision.endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        image,
+        exercise: exercises[state.activeExerciseIndex].title,
+        confidence: 0.45,
+      }),
+    });
+
+    if (!response.ok) throw new Error(`RF-DETR endpoint ${response.status}`);
+    const payload = await response.json();
+    vision.lastDetections = normalizeDetections(payload);
+    state.visionMode = "rfdetr";
+  } catch {
+    state.visionMode = "demo";
+    vision.lastDetections = demoDetections();
+  }
+
+  updateVisionUI(vision.lastDetections);
+}
+
+async function startVision() {
+  const video = document.querySelector("#camera-video");
+  if (!video) return;
+
+  if (!vision.raf) {
+    vision.lastDetections = demoDetections();
+    drawVisionLoop();
+    updateVisionUI(vision.lastDetections);
+  }
+
+  if (!vision.stream && navigator.mediaDevices?.getUserMedia) {
+    try {
+      vision.stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+      video.srcObject = vision.stream;
+      video.classList.add("is-live");
+      state.visionMode = vision.endpoint ? "rfdetr" : "demo";
+      setLiveStatus("Camera preview enabled");
+    } catch {
+      video.classList.remove("is-live");
+      state.visionMode = "demo";
+      setLiveStatus("Camera permission unavailable. Demo vision mode active.");
+    }
+  }
+
+  if (!vision.timer) {
+    detectFrame();
+    vision.timer = window.setInterval(detectFrame, 1400);
+  }
 }
 
 document.querySelector("#open-camera").addEventListener("click", openCamera);
@@ -253,6 +474,8 @@ document.querySelector("#switch-exercise").addEventListener("click", () => {
       ? "00:00"
       : `00:${String(Math.max(0, 10 - Math.floor(state.tracePercent / 10))).padStart(2, "0")}`;
   updateCamera();
+  vision.lastDetections = demoDetections();
+  updateVisionUI(vision.lastDetections);
   setLiveStatus("Form scan refreshed");
 });
 

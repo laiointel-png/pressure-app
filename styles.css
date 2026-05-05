@@ -693,10 +693,36 @@ svg {
     url("./assets/trace-athlete-lunge.jpg") center top / cover;
 }
 
+.camera-video,
+.vision-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.camera-video {
+  z-index: 0;
+  object-fit: cover;
+  opacity: 0;
+  transform: scaleX(-1);
+  transition: opacity 220ms ease;
+}
+
+.camera-video.is-live {
+  opacity: 0.72;
+}
+
+.vision-overlay {
+  z-index: 2;
+  pointer-events: none;
+}
+
 .camera-stage::before {
   position: absolute;
   inset: 0;
   content: "";
+  z-index: 1;
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.58));
 }
 
@@ -729,7 +755,7 @@ svg {
 
 .camera-coach {
   position: relative;
-  z-index: 3;
+  z-index: 4;
   max-width: 292px;
   margin-top: 8px;
   padding: 14px 16px;
@@ -751,10 +777,74 @@ svg {
   margin-top: 8px;
 }
 
+.vision-panel {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 10px;
+  max-width: 312px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(184, 169, 255, 0.28);
+  border-radius: 18px;
+  background: rgba(5, 5, 5, 0.52);
+  backdrop-filter: blur(20px);
+}
+
+.vision-panel h3 {
+  margin: 3px 0 0;
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+.vision-status {
+  align-self: start;
+  min-height: 30px;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: rgba(184, 169, 255, 0.14);
+  color: var(--lavender);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.vision-status.live {
+  background: var(--lime-soft);
+  color: var(--lime);
+}
+
+.vision-status.warning {
+  background: var(--danger-bg);
+  color: #ffb4b4;
+}
+
+.vision-tags {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 6px;
+}
+
+.vision-tags span {
+  min-height: 25px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.vision-panel p {
+  display: none;
+}
+
 .pose-skeleton {
   position: absolute;
-  inset: 188px 46px 310px;
-  z-index: 1;
+  inset: 262px 46px 288px;
+  z-index: 3;
 }
 
 .joint,

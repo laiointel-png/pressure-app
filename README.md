@@ -17,6 +17,18 @@ Real-photo fallback assets are stored in `assets/` and are sourced from Pexels w
 - `trace-athlete-lunge.jpg`: https://www.pexels.com/photo/focused-athlete-performing-lunges-with-dumbbells-33185468/
 - `trace-athlete-squat.jpg`: https://www.pexels.com/photo/woman-performing-squats-in-modern-gym-setting-29259728/
 
+## RF-DETR camera intelligence
+
+The camera screen includes a RF-DETR-ready vision adapter:
+
+- Live camera preview through `getUserMedia`
+- Canvas detection overlay
+- Detection chips for person/body/workout context
+- Local demo detector when no backend is configured
+- Optional RF-DETR endpoint integration
+
+See `docs/rfdetr-integration.md` and `backend/rfdetr_api_example.py`.
+
 ## GitHub Pages
 
 This repo is configured for GitHub Pages through `.github/workflows/pages.yml`.
