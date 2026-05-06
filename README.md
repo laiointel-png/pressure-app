@@ -24,8 +24,8 @@ The camera screen includes a RF-DETR-ready vision adapter:
 - Live camera preview through `getUserMedia`
 - Canvas detection overlay
 - Detection chips for person/body/workout context
-- Local demo detector when no backend is configured
-- Optional RF-DETR endpoint integration
+- Automatic local RF-DETR endpoint connection on `http://localhost:8000/api/rfdetr/detect`
+- Local demo detector when the backend is unavailable or returns no detections
 
 See `docs/rfdetr-integration.md` and `backend/rfdetr_api_example.py`.
 

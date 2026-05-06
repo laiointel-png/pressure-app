@@ -16,11 +16,15 @@ const state = {
   visionMode: "demo",
 };
 
+const localVisionEndpoint = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+  ? "http://localhost:8000/api/rfdetr/detect"
+  : "";
+
 const vision = {
   endpoint:
     window.PRESSURE_VISION_ENDPOINT ||
     localStorage.getItem("pressureVisionEndpoint") ||
-    "",
+    localVisionEndpoint,
   stream: null,
   timer: null,
   raf: null,
@@ -150,7 +154,7 @@ function updateHome() {
   document.querySelector("#mission-copy").textContent =
     left === 0
       ? "All checks passed. Your workout is counted and your streak is protected."
-      : `You have ${left} check${left === 1 ? "" : "s"} left. Finish every live trace or today's workout does not count.`;
+      : `${left} check${left === 1 ? "" : "s"} left. Finish ${left === 1 ? "it" : "them"} before 22:00.`;
   document.querySelector("#home-title").textContent =
     left === 0 ? "Workout counted" : `Start ${current.title}`;
   document.querySelector("#next-exercise-label").textContent = current.title;
@@ -244,14 +248,51 @@ function detectionLabel(detection) {
   return `${detection.label} ${Math.round(detection.confidence * 100)}%`;
 }
 
+function isPersonDetection(detection) {
+  return detection.label.toLowerCase().includes("person");
+}
+
+function isFullBodyFrame(detection) {
+  const bottom = detection.y + detection.height;
+  return isPersonDetection(detection) && detection.height >= 0.54 && detection.y <= 0.36 && bottom >= 0.74;
+}
+
+function enrichDetections(detections) {
+  const fullBodySource = detections.find(isFullBodyFrame);
+  const alreadyHasBody = detections.some((item) => item.label.toLowerCase().includes("body"));
+
+  if (!fullBodySource || alreadyHasBody) return detections;
+
+  return [
+    ...detections,
+    {
+      ...fullBodySource,
+      label: "full body frame",
+      confidence: Math.min(0.92, fullBodySource.confidence),
+    },
+  ];
+}
+
+function detectionTags(detections) {
+  const bestByLabel = new Map();
+  enrichDetections(detections).forEach((item) => {
+    const key = item.label.toLowerCase();
+    const current = bestByLabel.get(key);
+    if (!current || item.confidence > current.confidence) bestByLabel.set(key, item);
+  });
+
+  return [...bestByLabel.values()].sort((a, b) => b.confidence - a.confidence).slice(0, 4);
+}
+
 function updateVisionUI(detections = []) {
   const status = document.querySelector("#vision-status");
   const tags = document.querySelector("#vision-tags");
   const summary = document.querySelector("#vision-summary");
   if (!status || !tags || !summary) return;
 
-  const detected = detections.length ? detections : demoDetections();
-  const hasPerson = detected.some((item) => item.label.toLowerCase().includes("person"));
+  const detected = enrichDetections(detections.length ? detections : demoDetections());
+  const tagItems = detectionTags(detected);
+  const hasPerson = detected.some(isPersonDetection);
   const hasBody = detected.some((item) => item.label.toLowerCase().includes("body"));
   const mode = state.visionMode === "rfdetr" ? "RF-DETR live" : "Demo vision";
 
@@ -261,7 +302,7 @@ function updateVisionUI(detections = []) {
   status.textContent = mode;
 
   tags.replaceChildren(
-    ...detected.slice(0, 4).map((item) => {
+    ...tagItems.map((item) => {
       const tag = document.createElement("span");
       tag.textContent = detectionLabel(item);
       return tag;
@@ -358,7 +399,11 @@ async function detectFrame() {
 
     if (!response.ok) throw new Error(`RF-DETR endpoint ${response.status}`);
     const payload = await response.json();
-    vision.lastDetections = normalizeDetections(payload);
+    const detections = normalizeDetections(payload);
+    if (payload?.mode === "error" || !detections.length) {
+      throw new Error(payload?.message || "RF-DETR returned no detections");
+    }
+    vision.lastDetections = detections;
     state.visionMode = "rfdetr";
   } catch {
     state.visionMode = "demo";
@@ -390,7 +435,7 @@ async function startVision() {
       });
       video.srcObject = vision.stream;
       video.classList.add("is-live");
-      state.visionMode = vision.endpoint ? "rfdetr" : "demo";
+      state.visionMode = "demo";
       setLiveStatus("Camera preview enabled");
     } catch {
       video.classList.remove("is-live");

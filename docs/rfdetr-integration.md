@@ -16,6 +16,12 @@ or:
 localStorage.setItem("pressureVisionEndpoint", "http://localhost:8000/api/rfdetr/detect")
 ```
 
+On `localhost` or `127.0.0.1`, the app automatically falls back to:
+
+```text
+http://localhost:8000/api/rfdetr/detect
+```
+
 When an endpoint exists, the camera screen captures a 384x384 JPEG frame and sends:
 
 ```json
@@ -50,6 +56,8 @@ RF-DETR is distributed as a Python package (`pip install rfdetr`) and through Ro
 Phone camera -> frontend frame capture -> RF-DETR API -> detections -> trace UI / anti-cheat logic
 ```
 
+The local FastAPI example caches RF-DETR weights outside the repository at `~/.cache/pressure-rfdetr/`.
+
 ## Local demo mode
 
-If no endpoint is configured, the app stays usable with a local demo detector. It shows the same UI states and overlay shape, but labels are simulated.
+If no endpoint is configured, unavailable, or returns no detections, the app stays usable with a local demo detector. It shows the same UI states and overlay shape, but labels are simulated.
