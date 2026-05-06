@@ -1,19 +1,23 @@
 const screens = {
   home: document.querySelector("#screen-home"),
+  group: document.querySelector("#screen-group"),
   camera: document.querySelector("#screen-camera"),
   rank: document.querySelector("#screen-rank"),
+  profile: document.querySelector("#screen-profile"),
   success: document.querySelector("#screen-success"),
 };
 
 const state = {
   streak: 11,
-  verifiedCount: 2,
+  verifiedCount: 6,
   todayChecks: 2,
   activeExerciseIndex: 2,
   tracePercent: 52,
   trust: 92,
   form: 88,
   visionMode: "demo",
+  cameraPaused: false,
+  sheetAction: null,
 };
 
 const localVisionEndpoint = ["localhost", "127.0.0.1"].includes(window.location.hostname)
@@ -29,41 +33,40 @@ const vision = {
   timer: null,
   raf: null,
   lastDetections: [],
-  lastFrameAt: 0,
 };
 
 const exercises = [
   {
     title: "Goblet squat",
-    copy: "Depth and knee angle verified",
-    instruction: "Keep your feet planted and hit full depth.",
+    short: "Geaccepteerd",
+    instruction: "Plaats je hele lichaam in beeld en zak diep genoeg voor de check.",
     form: 96,
     trust: 95,
-    lock: "Depth and knees stay aligned",
+    lock: "Diepte en kniehoek goed",
   },
   {
     title: "Romanian deadlift",
-    copy: "Hip hinge path verified",
-    instruction: "Keep the hinge smooth and your back neutral.",
+    short: "Geaccepteerd",
+    instruction: "Houd je rug neutraal en laat de heupbeweging zichtbaar zijn.",
     form: 93,
     trust: 94,
-    lock: "Hip hinge path stays stable",
+    lock: "Hip hinge stabiel",
   },
   {
     title: "Push-up hold",
-    copy: "Need 10 clean seconds with shoulder lock",
-    instruction: "Keep shoulders and hips visible. Hold steady until the trace turns complete.",
+    short: "10 sec live controle nodig",
+    instruction: "Zorg dat schouders, heupen en voeten zichtbaar zijn. Houd 10 sec stabiel.",
     form: 88,
     trust: 92,
-    lock: "Lock shoulder angle for 10 sec",
+    lock: "Schouderhoek 10 sec vasthouden",
   },
   {
     title: "Walking lunge",
-    copy: "Need stride symmetry and balance lock",
-    instruction: "Keep your full body in frame and step slowly enough for trace approval.",
+    short: "Vrij na oefening 3",
+    instruction: "Stap rustig zodat de camera je stride en balans kan volgen.",
     form: 86,
     trust: 90,
-    lock: "Stride symmetry required",
+    lock: "Stride symmetrie nodig",
   },
 ];
 
@@ -72,23 +75,66 @@ function setLiveStatus(message) {
   if (liveStatus) liveStatus.textContent = message;
 }
 
+function setText(selector, text) {
+  const element = document.querySelector(selector);
+  if (element) element.textContent = text;
+}
+
+function showSheet({ label = "Update", title, message, primary = "Ok", secondary = "Sluiten", onPrimary = null }) {
+  const sheet = document.querySelector("#action-sheet");
+  if (!sheet) return;
+
+  state.sheetAction = onPrimary;
+  setText("#sheet-label", label);
+  setText("#sheet-title", title);
+  setText("#sheet-message", message);
+  setText("#sheet-primary", primary);
+  setText("#sheet-secondary", secondary);
+  sheet.classList.add("open");
+  sheet.setAttribute("aria-hidden", "false");
+  setLiveStatus(title);
+}
+
+function closeSheet() {
+  const sheet = document.querySelector("#action-sheet");
+  if (!sheet) return;
+  sheet.classList.remove("open");
+  sheet.setAttribute("aria-hidden", "true");
+  state.sheetAction = null;
+}
+
+function syncNav(activeName) {
+  document.querySelectorAll(".bottom-nav button").forEach((button) => {
+    const target = button.dataset.screenTarget;
+    const active = target === activeName || (button.id === "nav-verify" && activeName === "camera");
+    button.classList.toggle("active", active && button.id !== "nav-verify");
+    button.setAttribute("aria-current", active ? "page" : "false");
+  });
+}
+
 function showScreen(name) {
-  Object.values(screens).forEach((screen) => screen.classList.remove("active"));
-  screens[name].classList.add("active");
-  Object.values(screens).forEach((screen) => {
-    screen.scrollTop = 0;
+  const screen = screens[name] || screens.home;
+  Object.values(screens).forEach((item) => item.classList.remove("active"));
+  screen.classList.add("active");
+  Object.values(screens).forEach((item) => {
+    item.scrollTop = 0;
   });
 
   const hash = name === "home" ? location.pathname : `#${name}`;
-  if (location.hash !== `#${name}`) {
-    history.replaceState(null, "", hash);
-  }
+  if (location.hash !== `#${name}`) history.replaceState(null, "", hash);
 
-  setLiveStatus(`${name} screen opened`);
+  syncNav(name);
+  setLiveStatus(`${name} geopend`);
 
-  if (name === "camera") {
-    startVision();
-  }
+  if (name === "camera") startVision();
+}
+
+function remainingChecks() {
+  return Math.max(0, exercises.length - state.todayChecks);
+}
+
+function currentExercise() {
+  return exercises[state.activeExerciseIndex] || exercises[exercises.length - 1];
 }
 
 function renderHomeProgress(count) {
@@ -97,94 +143,107 @@ function renderHomeProgress(count) {
   progress.setAttribute("aria-valuenow", String(count));
 
   [...progress.children].forEach((segment, index) => {
-    segment.className = "";
     const label = segment.querySelector("small");
+    segment.className = "";
+
     if (index < count) {
       segment.classList.add("done");
-      if (label) label.textContent = "Done";
-    } else if (index === count && count < 4) {
-      segment.classList.add("active");
-      if (label) label.textContent = "Now";
-    } else if (label) {
-      label.textContent = index === count + 1 ? "Next" : "Locked";
+      if (label) label.textContent = "Klaar";
+      return;
     }
-  });
-}
 
-function renderTraceSteps() {
-  const steps = [...document.querySelectorAll("#trace-steps span")];
-  steps.forEach((step, index) => {
-    step.className = "";
-    if (index < state.todayChecks) step.classList.add("done");
-    if (index === state.activeExerciseIndex && state.todayChecks < 4) step.classList.add("active");
+    if (index === count && count < exercises.length) {
+      segment.classList.add("active");
+      if (label) label.textContent = "Nu";
+      return;
+    }
+
+    if (label) label.textContent = "Locked";
   });
 }
 
 function updateExerciseRows() {
-  const rows = [...document.querySelectorAll(".exercise-row")];
-  rows.forEach((row, index) => {
+  document.querySelectorAll(".exercise-row[data-exercise-index]").forEach((row) => {
+    const index = Number(row.dataset.exerciseIndex);
     const status = row.querySelector("em");
+    const small = row.querySelector("small");
+    const exercise = exercises[index];
+
     row.classList.remove("done", "active", "locked");
 
     if (index < state.todayChecks) {
       row.classList.add("done");
-      if (status) status.textContent = "Done";
-      row.setAttribute("aria-label", `${exercises[index].title} done`);
+      if (status) status.textContent = "Klaar";
+      if (small) small.textContent = "Geaccepteerd";
+      row.setAttribute("aria-label", `${exercise.title} klaar`);
       return;
     }
 
-    if (index === state.activeExerciseIndex && state.todayChecks < 4) {
+    if (index === state.activeExerciseIndex && state.todayChecks < exercises.length) {
       row.classList.add("active");
       if (status) status.textContent = "Start";
-      row.setAttribute("aria-label", `${exercises[index].title} is next`);
+      if (small) small.textContent = exercise.short;
+      row.setAttribute("aria-label", `${exercise.title} is nu aan de beurt`);
       return;
     }
 
     row.classList.add("locked");
     if (status) status.textContent = "Locked";
-    row.setAttribute("aria-label", `${exercises[index].title} locked`);
+    if (small) small.textContent = `Vrij na oefening ${index}`;
+    row.setAttribute("aria-label", `${exercise.title} locked`);
   });
 }
 
 function updateHome() {
-  const current = exercises[state.activeExerciseIndex] ?? exercises[3];
-  const left = Math.max(0, 4 - state.todayChecks);
+  const current = currentExercise();
+  const left = remainingChecks();
 
-  document.querySelector("#streak-value").textContent = state.streak;
-  document.querySelector("#mission-copy").textContent =
+  setText("#hero-check-count", `${state.todayChecks}/4`);
+  setText("#home-rank", "#2");
+  setText("#streak-value", String(state.streak));
+  setText("#profile-streak", String(state.streak));
+  setText("#profile-left", String(left));
+  setText("#profile-workouts", String(state.verifiedCount));
+  setText("#group-user-status", `${state.todayChecks}/4 klaar`);
+  setText("#rank-user-status", `${state.verifiedCount} workouts, 0 misses`);
+  setText("#progress-pill", left === 0 ? "Compleet" : `${left} open`);
+
+  setText(
+    "#mission-copy",
     left === 0
-      ? "All checks passed. Your workout is counted and your streak is protected."
-      : `${left} check${left === 1 ? "" : "s"} left. Finish ${left === 1 ? "it" : "them"} before 22:00.`;
-  document.querySelector("#home-title").textContent =
-    left === 0 ? "Workout counted" : `Start ${current.title}`;
-  document.querySelector("#next-exercise-label").textContent = current.title;
-  document.querySelector("#next-exercise-copy").textContent =
-    left === 0 ? "All exercise blocks are accepted" : current.copy;
-  document.querySelector("#rank-user-status").textContent = `${state.verifiedCount + 4} verified workouts`;
-
-  document.querySelector("#main-cta-label").textContent =
-    left === 0 ? "Review today's workout" : "Start 10-sec trace";
+      ? "Je workout telt. Je streak is beschermd en de groep ziet je verified check-in."
+      : `Maak oefening ${state.activeExerciseIndex + 1} van 4 af voor 22:00. Penalty bij missen: EUR 10.`,
+  );
+  setText("#home-title", left === 0 ? "Workout telt vandaag" : `Nog ${left} check${left === 1 ? "" : "s"} tot je workout telt`);
+  setText("#main-cta-label", left === 0 ? "Bekijk resultaat" : `Start oefening ${state.activeExerciseIndex + 1}`);
+  setText("#next-exercise-label", current.title);
+  setText("#next-exercise-copy", left === 0 ? "Alle oefeningen zijn geaccepteerd" : current.short);
 
   renderHomeProgress(state.todayChecks);
   updateExerciseRows();
 }
 
 function updateCamera() {
-  const current = exercises[state.activeExerciseIndex] ?? exercises[3];
-  document.querySelector("#camera-title").textContent = current.title;
-  document.querySelector("#camera-step-label").textContent = `Exercise ${state.activeExerciseIndex + 1} of 4`;
-  document.querySelector("#camera-instruction").textContent = current.instruction;
-  document.querySelector("#form-score").textContent = `${state.form}%`;
-  document.querySelector("#trust-score").textContent = `${state.trust}%`;
-  document.querySelector("#trace-fill").style.width = `${state.tracePercent}%`;
-  document.querySelector(".trace-bar").setAttribute("aria-valuenow", String(state.tracePercent));
-  document.querySelector("#angle-line").textContent = current.lock;
-  renderTraceSteps();
+  const current = currentExercise();
+  setText("#camera-title", current.title);
+  setText("#camera-step-label", `Oefening ${state.activeExerciseIndex + 1} van 4`);
+  setText("#camera-instruction", current.instruction);
+  setText("#form-score", `${state.form}%`);
+  setText("#trust-score", `${state.trust}%`);
+  setText("#angle-line", current.lock);
+
+  const fill = document.querySelector("#trace-fill");
+  const bar = document.querySelector(".trace-bar");
+  if (fill) fill.style.width = `${state.tracePercent}%`;
+  if (bar) bar.setAttribute("aria-valuenow", String(state.tracePercent));
+
   updateVisionUI(vision.lastDetections);
 }
 
 function addFeedItem(title, subtitle, tone = "") {
   const feed = document.querySelector("#feed-list");
+  if (!feed) return;
+
   const row = document.createElement("article");
   row.className = `feed-row ${tone}`.trim();
   row.innerHTML = `
@@ -193,17 +252,41 @@ function addFeedItem(title, subtitle, tone = "") {
       <strong>${title}</strong>
       <span>${subtitle}</span>
     </div>
-    <small>now</small>
+    <small>nu</small>
   `;
   feed.prepend(row);
 }
 
 function openCamera() {
-  if (state.todayChecks >= 4) {
+  if (state.todayChecks >= exercises.length) {
     showScreen("success");
     return;
   }
   showScreen("camera");
+}
+
+function handleExerciseClick(index) {
+  if (index < state.todayChecks) {
+    showSheet({
+      label: "Al klaar",
+      title: `${exercises[index].title} is geaccepteerd`,
+      message: "Deze oefening telt al mee voor je workout van vandaag.",
+    });
+    return;
+  }
+
+  if (index === state.activeExerciseIndex) {
+    openCamera();
+    return;
+  }
+
+  showSheet({
+    label: "Nog locked",
+    title: "Rond eerst de vorige check af",
+    message: `${exercises[index].title} opent zodra oefening ${state.activeExerciseIndex + 1} is geaccepteerd.`,
+    primary: "Start huidige check",
+    onPrimary: openCamera,
+  });
 }
 
 function normalizeDetections(payload) {
@@ -236,11 +319,11 @@ function normalizeDetections(payload) {
 }
 
 function demoDetections() {
-  const current = exercises[state.activeExerciseIndex] ?? exercises[3];
+  const current = currentExercise();
   return [
-    { label: "person", confidence: 0.96, x: 0.27, y: 0.22, width: 0.46, height: 0.62 },
-    { label: "full body", confidence: current.title === "Walking lunge" ? 0.89 : 0.91, x: 0.2, y: 0.18, width: 0.6, height: 0.72 },
-    { label: current.title.toLowerCase(), confidence: 0.86, x: 0.3, y: 0.35, width: 0.4, height: 0.38 },
+    { label: "person", confidence: 0.96, x: 0.24, y: 0.18, width: 0.5, height: 0.68 },
+    { label: "full body", confidence: current.title === "Walking lunge" ? 0.89 : 0.92, x: 0.18, y: 0.16, width: 0.62, height: 0.74 },
+    { label: current.title.toLowerCase(), confidence: 0.86, x: 0.3, y: 0.34, width: 0.42, height: 0.38 },
   ];
 }
 
@@ -294,7 +377,7 @@ function updateVisionUI(detections = []) {
   const tagItems = detectionTags(detected);
   const hasPerson = detected.some(isPersonDetection);
   const hasBody = detected.some((item) => item.label.toLowerCase().includes("body"));
-  const mode = state.visionMode === "rfdetr" ? "RF-DETR live" : "Demo vision";
+  const mode = state.visionMode === "rfdetr" ? "RF-DETR live" : "Demo";
 
   status.className = "vision-status";
   if (hasPerson && hasBody) status.classList.add("live");
@@ -311,11 +394,11 @@ function updateVisionUI(detections = []) {
 
   summary.textContent =
     hasPerson && hasBody
-      ? "Person and full-body frame are visible. Trace can evaluate this block."
-      : "Move back until your full body is visible before accepting the block.";
+      ? "Full body is zichtbaar. Deze check kan meetellen."
+      : "Stap verder naar achteren tot je hele lichaam zichtbaar is.";
 
-  document.querySelector("#form-score").textContent = hasBody ? `${state.form}%` : "Hold";
-  document.querySelector("#trust-score").textContent = hasPerson ? `${state.trust}%` : "Low";
+  setText("#form-score", hasBody ? `${state.form}%` : "Hold");
+  setText("#trust-score", hasPerson ? `${state.trust}%` : "Laag");
 }
 
 function drawVisionOverlay(detections = []) {
@@ -339,26 +422,26 @@ function drawVisionOverlay(detections = []) {
     const height = detection.height * rect.height;
     const label = detectionLabel(detection);
 
-    ctx.strokeStyle = detection.label.includes("person") ? "#d4ff00" : "#b8a9ff";
-    ctx.lineWidth = 2;
-    ctx.shadowColor = ctx.strokeStyle;
-    ctx.shadowBlur = 10;
+    ctx.strokeStyle = detection.label.toLowerCase().includes("person") ? "#ff5a00" : "#168a3a";
+    ctx.lineWidth = 3;
+    ctx.shadowColor = "rgba(0,0,0,0.24)";
+    ctx.shadowBlur = 8;
     ctx.strokeRect(x, y, width, height);
 
     ctx.shadowBlur = 0;
-    ctx.font = "800 11px Inter, sans-serif";
+    ctx.font = "900 11px Inter, sans-serif";
     const labelWidth = ctx.measureText(label).width + 14;
-    ctx.fillStyle = "rgba(5, 5, 5, 0.82)";
-    ctx.fillRect(x, Math.max(8, y - 26), labelWidth, 22);
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.fillText(label, x + 7, Math.max(23, y - 10));
+    ctx.fillStyle = "#050505";
+    ctx.fillRect(x, Math.max(8, y - 27), labelWidth, 23);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(label, x + 7, Math.max(24, y - 11));
   });
 
   ctx.restore();
 }
 
 function drawVisionLoop() {
-  const detections = vision.lastDetections.length ? vision.lastDetections : demoDetections();
+  const detections = vision.lastDetections.length ? enrichDetections(vision.lastDetections) : demoDetections();
   drawVisionOverlay(detections);
   vision.raf = requestAnimationFrame(drawVisionLoop);
 }
@@ -376,6 +459,8 @@ function captureFrame() {
 }
 
 async function detectFrame() {
+  if (state.cameraPaused) return;
+
   if (!vision.endpoint) {
     state.visionMode = "demo";
     vision.lastDetections = demoDetections();
@@ -384,7 +469,12 @@ async function detectFrame() {
   }
 
   const image = captureFrame();
-  if (!image) return;
+  if (!image) {
+    state.visionMode = "demo";
+    vision.lastDetections = demoDetections();
+    updateVisionUI(vision.lastDetections);
+    return;
+  }
 
   try {
     const response = await fetch(vision.endpoint, {
@@ -392,7 +482,7 @@ async function detectFrame() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         image,
-        exercise: exercises[state.activeExerciseIndex].title,
+        exercise: currentExercise().title,
         confidence: 0.45,
       }),
     });
@@ -435,12 +525,11 @@ async function startVision() {
       });
       video.srcObject = vision.stream;
       video.classList.add("is-live");
-      state.visionMode = "demo";
-      setLiveStatus("Camera preview enabled");
+      setLiveStatus("Camera preview actief");
     } catch {
       video.classList.remove("is-live");
       state.visionMode = "demo";
-      setLiveStatus("Camera permission unavailable. Demo vision mode active.");
+      setLiveStatus("Camera toestemming niet beschikbaar. Demo controle actief.");
     }
   }
 
@@ -450,78 +539,183 @@ async function startVision() {
   }
 }
 
-document.querySelector("#open-camera").addEventListener("click", openCamera);
-document.querySelector("#open-camera-secondary").addEventListener("click", openCamera);
-document.querySelector("#current-exercise-row").addEventListener("click", openCamera);
-document.querySelector("#nav-verify").addEventListener("click", openCamera);
-
-document.querySelector("#back-home").addEventListener("click", () => {
-  showScreen("home");
-});
-
-document.querySelector("#rank-nav").addEventListener("click", () => {
-  showScreen("rank");
-});
-
-document.querySelector("#close-rank").addEventListener("click", () => {
-  showScreen("home");
-});
-
-document.querySelector("#success-home").addEventListener("click", () => {
-  showScreen("home");
-});
-
-document.querySelector("#success-back").addEventListener("click", () => {
-  showScreen("home");
-});
-
-document.querySelector("#success-rank").addEventListener("click", () => {
-  showScreen("rank");
-});
-
-document.querySelector("#simulate-verify").addEventListener("click", () => {
-  const current = exercises[state.activeExerciseIndex];
-  addFeedItem(`${current.title} accepted`, `Trace confidence ${state.trust}%`, "good");
+function acceptCurrentExercise() {
+  const current = currentExercise();
+  addFeedItem(`${current.title} geaccepteerd`, `Trust score ${state.trust}%`, "good");
 
   if (state.activeExerciseIndex < exercises.length - 1) {
-    state.todayChecks = Math.min(4, state.todayChecks + 1);
+    state.todayChecks = Math.min(exercises.length, state.todayChecks + 1);
     state.activeExerciseIndex += 1;
-    state.tracePercent = 18;
-    state.form = exercises[state.activeExerciseIndex].form;
-    state.trust = exercises[state.activeExerciseIndex].trust;
-    document.querySelector("#trace-timer").textContent = "00:10";
-    document.querySelector("#motion-score").textContent = "Live";
+    state.tracePercent = 20;
+    state.form = currentExercise().form;
+    state.trust = currentExercise().trust;
+    setText("#trace-timer", "00:10");
+    setText("#motion-score", "Actief");
     updateHome();
     updateCamera();
-    setLiveStatus(`${current.title} accepted. Next exercise unlocked.`);
+    showSheet({
+      label: "Check klaar",
+      title: `${current.title} telt mee`,
+      message: `Oefening ${state.activeExerciseIndex + 1} is nu open. Nog ${remainingChecks()} check${remainingChecks() === 1 ? "" : "s"} tot je workout telt.`,
+      primary: "Volgende check",
+      onPrimary: openCamera,
+    });
     return;
   }
 
   state.streak += 1;
   state.verifiedCount += 1;
-  state.todayChecks = 4;
+  state.todayChecks = exercises.length;
   state.tracePercent = 100;
-  document.querySelector("#trace-timer").textContent = "DONE";
-  document.querySelector("#motion-score").textContent = "Locked";
-  addFeedItem("You finished all 4 trace blocks", "Workout counted for today", "good");
-  document.querySelector("#success-streak").textContent = `${state.streak} days`;
+  setText("#trace-timer", "DONE");
+  setText("#motion-score", "Locked");
+  setText("#success-streak", String(state.streak));
+  addFeedItem("Jij hebt 4/4 gehaald", "Workout telt vandaag", "good");
   updateHome();
   updateCamera();
   showScreen("success");
-});
+}
 
-document.querySelector("#switch-exercise").addEventListener("click", () => {
-  state.tracePercent = Math.min(100, state.tracePercent + 14);
-  state.form = Math.max(84, state.form - 1);
-  state.trust = Math.max(88, state.trust - 1);
-  document.querySelector("#trace-timer").textContent =
+function scanAgain() {
+  state.tracePercent = Math.min(100, state.tracePercent + 16);
+  state.form = Math.max(82, state.form - 1);
+  state.trust = Math.max(87, state.trust - 1);
+  setText(
+    "#trace-timer",
     state.tracePercent >= 100
       ? "00:00"
-      : `00:${String(Math.max(0, 10 - Math.floor(state.tracePercent / 10))).padStart(2, "0")}`;
-  updateCamera();
+      : `00:${String(Math.max(0, 10 - Math.floor(state.tracePercent / 10))).padStart(2, "0")}`,
+  );
   vision.lastDetections = demoDetections();
-  updateVisionUI(vision.lastDetections);
-  setLiveStatus("Form scan refreshed");
+  updateCamera();
+  setLiveStatus("Scan opnieuw uitgevoerd");
+}
+
+document.querySelector("#open-camera").addEventListener("click", openCamera);
+document.querySelector("#open-camera-secondary").addEventListener("click", openCamera);
+document.querySelector("#current-exercise-row").addEventListener("click", openCamera);
+document.querySelector("#nav-verify").addEventListener("click", openCamera);
+document.querySelector("#simulate-verify").addEventListener("click", acceptCurrentExercise);
+document.querySelector("#switch-exercise").addEventListener("click", scanAgain);
+
+document.querySelector("#back-home").addEventListener("click", () => showScreen("home"));
+document.querySelector("#group-back").addEventListener("click", () => showScreen("home"));
+document.querySelector("#close-rank").addEventListener("click", () => showScreen("home"));
+document.querySelector("#profile-back").addEventListener("click", () => showScreen("home"));
+document.querySelector("#success-home").addEventListener("click", () => showScreen("home"));
+document.querySelector("#success-back").addEventListener("click", () => showScreen("home"));
+document.querySelector("#success-rank").addEventListener("click", () => showScreen("rank"));
+
+document.querySelector("#home-group-action").addEventListener("click", () => showScreen("group"));
+document.querySelector("#home-rank-action").addEventListener("click", () => showScreen("rank"));
+document.querySelector("#home-penalty-action").addEventListener("click", () => {
+  showSheet({
+    label: "Penalty",
+    title: "Mis je, dan ziet de groep het",
+    message: "Bij minder dan 4 live checks voor 22:00 gaat EUR 10 naar de weekpot. De status komt in de feed.",
+  });
+});
+
+document.querySelector("#menu-button").addEventListener("click", () => {
+  showSheet({
+    label: "Menu",
+    title: "Alles zit nu in de onderste navigatie",
+    message: "Vandaag, Groep, Check, Rank en Profiel zijn allemaal werkende schermen in deze preview.",
+  });
+});
+
+document.querySelector("#notifications-button").addEventListener("click", () => {
+  showSheet({
+    label: "Meldingen",
+    title: "Timothy is bijna te laat",
+    message: "42 minuten tot penalty. In productie wordt dit een push-notification naar de groep.",
+    primary: "Open groep",
+    onPrimary: () => showScreen("group"),
+  });
+});
+
+document.querySelector("#invite-button").addEventListener("click", async () => {
+  const invite = "https://pressure.app/join/iron-pact";
+  try {
+    await navigator.clipboard?.writeText(invite);
+  } catch {
+    // Clipboard is optional in some preview contexts.
+  }
+  showSheet({
+    label: "Invite",
+    title: "Invite link gekopieerd",
+    message: invite,
+  });
+});
+
+document.querySelector("#send-reminder").addEventListener("click", () => {
+  addFeedItem("Reminder verstuurd", "Timothy en Layo krijgen een push", "");
+  showSheet({
+    label: "Reminder",
+    title: "Groep krijgt een push",
+    message: "Iedereen die nog niet klaar is krijgt: 'Je hebt nog checks open. Breek de chain niet.'",
+  });
+});
+
+document.querySelector("#edit-rules").addEventListener("click", () => {
+  showSheet({
+    label: "Regels",
+    title: "Daily check-in, 4 oefeningen",
+    message: "Deadline 22:00. Penalty EUR 10. Winner of the week krijgt de pot. Alleen live camera checks tellen.",
+  });
+});
+
+document.querySelector("#rank-info").addEventListener("click", () => {
+  showSheet({
+    label: "Rank",
+    title: "Punten zijn simpel",
+    message: "+4 per verified workout. -10 bij miss. Alleen volledige 4/4 workouts tellen mee.",
+  });
+});
+
+document.querySelector("#settings-button").addEventListener("click", () => {
+  showSheet({
+    label: "Instellingen",
+    title: "Demo instellingen",
+    message: "Hier komen penalty bedrag, check-in tijden, betaalmethode en privacy instellingen.",
+  });
+});
+
+document.querySelector("#payment-button").addEventListener("click", () => {
+  showSheet({
+    label: "Payment",
+    title: "Payment flow is demo",
+    message: "Voor echte automatische incasso is straks Stripe/SEPA setup en expliciete toestemming nodig.",
+  });
+});
+
+document.querySelector("#pause-trace").addEventListener("click", () => {
+  state.cameraPaused = !state.cameraPaused;
+  setText("#camera-record-label", state.cameraPaused ? "Gepauzeerd" : "Live check");
+  setText("#motion-score", state.cameraPaused ? "Pauze" : "Actief");
+  showSheet({
+    label: state.cameraPaused ? "Pauze" : "Live",
+    title: state.cameraPaused ? "Check staat gepauzeerd" : "Check is weer live",
+    message: state.cameraPaused ? "De workout telt pas wanneer de live check weer actief is." : "De camera controle loopt weer door.",
+  });
+});
+
+document.querySelector("#sheet-primary").addEventListener("click", () => {
+  const action = state.sheetAction;
+  closeSheet();
+  if (action) action();
+});
+document.querySelector("#sheet-secondary").addEventListener("click", closeSheet);
+document.querySelector("#action-sheet").addEventListener("click", (event) => {
+  if (event.target.id === "action-sheet") closeSheet();
+});
+
+document.querySelectorAll("[data-screen-target]").forEach((button) => {
+  button.addEventListener("click", () => showScreen(button.dataset.screenTarget));
+});
+
+document.querySelectorAll(".exercise-row[data-exercise-index]").forEach((row) => {
+  row.addEventListener("click", () => handleExerciseClick(Number(row.dataset.exerciseIndex)));
 });
 
 updateHome();

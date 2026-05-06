@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="en">
+<html lang="nl">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Pressure is a mobile accountability fitness prototype where workouts count only after live camera exercise checks."
+      content="Pressure is een accountability fitness app waar workouts pas meetellen na live camera checks."
     />
-    <title>Pressure - Verified Workout Prototype</title>
+    <title>Pressure - Workout Accountability</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,13 +16,13 @@
     />
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23050505'/%3E%3Cpath d='M18 34h28M32 20v28' stroke='%23d4ff00' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050505'/%3E%3Cpath d='M18 42 44 16' stroke='%23ff5a00' stroke-width='9' stroke-linecap='round'/%3E%3Cpath d='M20 20h20v20H20z' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="./styles.css?v=12" />
+    <link rel="stylesheet" href="./styles.css?v=13" />
   </head>
   <body>
     <main class="app-shell">
-      <section class="device-frame" aria-label="Pressure mobile prototype">
+      <section class="device-frame" aria-label="Pressure mobile app">
         <div class="status-bar" aria-hidden="true">
           <span>9:41</span>
           <span>Live</span>
@@ -31,7 +31,7 @@
 
         <section class="screen active" id="screen-home" aria-labelledby="home-title">
           <header class="app-header">
-            <button class="icon-button" type="button" aria-label="Open menu">
+            <button class="icon-button" id="menu-button" type="button" aria-label="Open menu">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M4 7h16" />
                 <path d="M4 12h16" />
@@ -42,7 +42,7 @@
               <strong>PRESSURE</strong>
               <span>Team Iron Pact</span>
             </div>
-            <button class="icon-button" type="button" aria-label="Notifications">
+            <button class="icon-button" id="notifications-button" type="button" aria-label="Meldingen">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
                 <path d="M10 21h4" />
@@ -50,278 +50,255 @@
             </button>
           </header>
 
-          <section class="mission-card" aria-labelledby="home-title">
-            <div class="mission-media" aria-hidden="true"></div>
-            <div class="mission-content">
-              <div class="mission-topline">
-                <span class="label">Next action</span>
-                <span class="deadline-chip">22:00 deadline</span>
-              </div>
-              <h1 id="home-title">Start Push-up hold</h1>
-              <p id="mission-copy">2 checks left. Finish both before 22:00.</p>
-
-              <div
-                class="step-progress"
-                id="home-progress"
-                role="progressbar"
-                aria-label="Workout verification progress"
-                aria-valuemin="0"
-                aria-valuemax="4"
-                aria-valuenow="2"
-              >
-                <span class="done"><b>1</b><small>Done</small></span>
-                <span class="done"><b>2</b><small>Done</small></span>
-                <span class="active"><b>3</b><small>Now</small></span>
-                <span><b>4</b><small>Next</small></span>
-              </div>
-
-              <div class="mission-facts" aria-label="What is at stake">
-                <article>
-                  <span>Penalty risk</span>
-                  <strong>EUR 10</strong>
-                </article>
-                <article>
-                  <span>Group sees</span>
-                  <strong>Misses</strong>
-                </article>
-              </div>
-
-              <button class="primary-button" id="open-camera" type="button">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 5v14" />
-                  <path d="M5 12h14" />
-                </svg>
-                <span id="main-cta-label">Start 10-sec trace</span>
-              </button>
+          <section class="hero-card" aria-labelledby="home-title">
+            <div class="hero-copy">
+              <span class="section-label">Vandaag</span>
+              <h1 id="home-title">Nog 2 checks tot je workout telt</h1>
+              <p id="mission-copy">Maak oefening 3 en 4 af voor 22:00. Mis je een check, dan gaat EUR 10 naar de pot.</p>
             </div>
+            <div class="hero-score" aria-label="Voortgang vandaag">
+              <strong id="hero-check-count">2/4</strong>
+              <span>checks klaar</span>
+            </div>
+            <button class="primary-button" id="open-camera" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+              <span id="main-cta-label">Start oefening 3</span>
+            </button>
           </section>
 
-          <section class="coach-card" aria-labelledby="coach-title">
-            <div class="section-title">
-              <span class="label">Before you tap start</span>
-              <h2 id="coach-title">Make the check count</h2>
-            </div>
-            <div class="coach-list">
-              <article>
-                <span class="coach-number">1</span>
-                <div>
-                  <strong>Full body in frame</strong>
-                  <small>Shoulders, hips, and feet visible.</small>
-                </div>
-              </article>
-              <article>
-                <span class="coach-number">2</span>
-                <div>
-                  <strong>Stay live for 10 sec</strong>
-                  <small>No upload, old clip, or cutaway.</small>
-                </div>
-              </article>
-              <article>
-                <span class="coach-number">3</span>
-                <div>
-                  <strong>Accept or retry</strong>
-                  <small>Low trace confidence keeps it open.</small>
-                </div>
-              </article>
-            </div>
+          <section class="status-strip" aria-label="Belangrijkste status">
+            <article>
+              <span>Deadline</span>
+              <strong>22:00</strong>
+            </article>
+            <article>
+              <span>Pot</span>
+              <strong>EUR 140</strong>
+            </article>
+            <article>
+              <span>Rank</span>
+              <strong id="home-rank">#2</strong>
+            </article>
           </section>
 
-          <section class="trace-section" aria-labelledby="trace-title">
+          <section class="progress-card" aria-labelledby="progress-title">
             <div class="section-title row">
               <div>
-                <span class="label">Today's protocol</span>
-                <h2 id="trace-title">4 checks to unlock credit</h2>
+                <span class="section-label">Workout credit</span>
+                <h2 id="progress-title">Pas geldig bij 4 live checks</h2>
+              </div>
+              <span class="small-pill" id="progress-pill">2 open</span>
+            </div>
+            <div class="step-progress" id="home-progress" role="progressbar" aria-label="Workout voortgang" aria-valuemin="0" aria-valuemax="4" aria-valuenow="2">
+              <span class="done"><b>1</b><small>Klaar</small></span>
+              <span class="done"><b>2</b><small>Klaar</small></span>
+              <span class="active"><b>3</b><small>Nu</small></span>
+              <span><b>4</b><small>Locked</small></span>
+            </div>
+          </section>
+
+          <section class="quick-actions" aria-label="Snelle acties">
+            <button class="quick-action" id="home-group-action" type="button">
+              <span class="action-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M16 11a4 4 0 1 0-8 0" />
+                  <path d="M3 21a7 7 0 0 1 18 0" />
+                </svg>
+              </span>
+              <strong>Groep</strong>
+              <small>Zie wie nog moet</small>
+            </button>
+            <button class="quick-action" id="home-rank-action" type="button">
+              <span class="action-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 19V9" />
+                  <path d="M12 19V5" />
+                  <path d="M19 19v-7" />
+                </svg>
+              </span>
+              <strong>Rank</strong>
+              <small>Weekstand</small>
+            </button>
+            <button class="quick-action" id="home-penalty-action" type="button">
+              <span class="action-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 8v5" />
+                  <path d="M12 17h.01" />
+                  <path d="M10.3 4.5 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.5a2 2 0 0 0-3.4 0Z" />
+                </svg>
+              </span>
+              <strong>Penalty</strong>
+              <small>Regels</small>
+            </button>
+          </section>
+
+          <section class="content-card" aria-labelledby="trace-title">
+            <div class="section-title row">
+              <div>
+                <span class="section-label">Vandaag protocol</span>
+                <h2 id="trace-title">4 oefeningen</h2>
               </div>
               <button class="text-button" id="open-camera-secondary" type="button">Start</button>
             </div>
-
-            <div class="exercise-list">
-              <button class="exercise-row done" type="button" aria-label="Goblet squat done">
+            <div class="exercise-list" id="exercise-list">
+              <button class="exercise-row done" type="button" data-exercise-index="0">
                 <span class="step-badge">01</span>
                 <span>
                   <strong>Goblet squat</strong>
-                  <small>Depth and knee angle verified</small>
+                  <small>Geaccepteerd</small>
                 </span>
-                <em>Done</em>
+                <em>Klaar</em>
               </button>
-              <button class="exercise-row done" type="button" aria-label="Romanian deadlift done">
+              <button class="exercise-row done" type="button" data-exercise-index="1">
                 <span class="step-badge">02</span>
                 <span>
                   <strong>Romanian deadlift</strong>
-                  <small>Hip hinge path verified</small>
+                  <small>Geaccepteerd</small>
                 </span>
-                <em>Done</em>
+                <em>Klaar</em>
               </button>
-              <button class="exercise-row active" id="current-exercise-row" type="button">
+              <button class="exercise-row active" id="current-exercise-row" type="button" data-exercise-index="2">
                 <span class="step-badge">03</span>
                 <span>
                   <strong id="next-exercise-label">Push-up hold</strong>
-                  <small id="next-exercise-copy">Need 10 clean seconds with shoulder lock</small>
+                  <small id="next-exercise-copy">10 sec live controle nodig</small>
                 </span>
                 <em>Start</em>
               </button>
-              <button class="exercise-row locked" type="button" aria-label="Walking lunge locked">
+              <button class="exercise-row locked" type="button" data-exercise-index="3">
                 <span class="step-badge">04</span>
                 <span>
                   <strong>Walking lunge</strong>
-                  <small>Unlocks after step 3 is accepted</small>
+                  <small>Vrij na oefening 3</small>
                 </span>
                 <em>Locked</em>
               </button>
             </div>
           </section>
 
-          <section class="stats-grid" aria-label="Accountability stats">
-            <article>
-              <span>Streak</span>
-              <strong id="streak-value">11</strong>
-              <small>days protected</small>
-            </article>
-            <article>
-              <span>Penalty pot</span>
-              <strong>EUR 140</strong>
-              <small>winner takes</small>
-            </article>
-            <article>
-              <span>Rank</span>
-              <strong>#2</strong>
-              <small>this week</small>
-            </article>
-            <article>
-              <span>Time left</span>
-              <strong>3h 12m</strong>
-              <small>before penalty</small>
-            </article>
+          <section class="content-card penalty-card" aria-labelledby="penalty-home-title">
+            <span class="section-label">Als je mist</span>
+            <h2 id="penalty-home-title">Geen check is geen workout</h2>
+            <p>De groep ziet de miss. EUR 10 gaat automatisch naar de weekpot. Simpel, zichtbaar, duidelijk.</p>
           </section>
 
-          <section class="priority-section" aria-labelledby="pressure-title">
+          <section class="content-card" aria-labelledby="feed-title">
             <div class="section-title">
-              <span class="label">Group pressure</span>
-              <h2 id="pressure-title">Needs attention</h2>
-            </div>
-            <div class="priority-list">
-              <article class="priority-card">
-                <div class="priority-icon success" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="m5 12 4 4L19 6" />
-                  </svg>
-                </div>
-                <div>
-                  <strong>You are up next</strong>
-                  <span>Finish 2 more checks to keep the workout valid.</span>
-                </div>
-              </article>
-              <article class="priority-card danger">
-                <div class="priority-icon danger" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M12 8v5" />
-                    <path d="M12 17h.01" />
-                    <path d="M10.3 4.5 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.5a2 2 0 0 0-3.4 0Z" />
-                  </svg>
-                </div>
-                <div>
-                  <strong>Timothy is at risk</strong>
-                  <span>42 minutes left. If he misses, EUR 10 moves to the pot.</span>
-                </div>
-              </article>
-            </div>
-          </section>
-
-          <section class="feed-section" aria-labelledby="feed-title">
-            <div class="section-title">
-              <span class="label">Live feed</span>
-              <h2 id="feed-title">Group updates</h2>
+              <span class="section-label">Live feed</span>
+              <h2 id="feed-title">Wat je groep ziet</h2>
             </div>
             <div class="feed-list" id="feed-list">
               <article class="feed-row good">
                 <div class="avatar">M</div>
                 <div>
-                  <strong>Mila finished all 4 blocks</strong>
+                  <strong>Mila heeft 4/4 gehaald</strong>
                   <span>Trace confidence 94%</span>
                 </div>
-                <small>now</small>
+                <small>nu</small>
               </article>
               <article class="feed-row bad">
                 <div class="avatar danger">T</div>
                 <div>
-                  <strong>Timothy missed his window</strong>
-                  <span>EUR 10 added to the pot</span>
+                  <strong>Timothy mist bijna</strong>
+                  <span>42 min over voor penalty</span>
                 </div>
                 <small>14m</small>
               </article>
-              <article class="feed-row">
-                <div class="avatar">L</div>
-                <div>
-                  <strong>Layo cleared step 3</strong>
-                  <span>Push-up hold accepted</span>
-                </div>
-                <small>22m</small>
-              </article>
             </div>
           </section>
+        </section>
 
-          <nav class="bottom-nav" aria-label="Main navigation">
-            <button class="active" data-nav="home" type="button" aria-current="page">
+        <section class="screen" id="screen-group" aria-labelledby="group-title">
+          <header class="app-header">
+            <button class="icon-button" id="group-back" type="button" aria-label="Terug naar vandaag">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 10.5 12 4l8 6.5V20H4z" />
-                <path d="M9 20v-6h6v6" />
+                <path d="M15 18 9 12l6-6" />
               </svg>
-              <span>Today</span>
             </button>
-            <button type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M16 11a4 4 0 1 0-8 0" />
-                <path d="M3 20a7 7 0 0 1 18 0" />
-              </svg>
-              <span>Group</span>
-            </button>
-            <button class="primary-nav" id="nav-verify" type="button">
+            <div>
+              <strong id="group-title">Team Iron Pact</strong>
+              <span>4 leden, daily check-in</span>
+            </div>
+            <button class="icon-button" id="invite-button" type="button" aria-label="Invite link">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 5v14" />
                 <path d="M5 12h14" />
               </svg>
-              <span>Verify</span>
             </button>
-            <button id="rank-nav" data-nav="rank" type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 19V9" />
-                <path d="M12 19V5" />
-                <path d="M19 19v-7" />
-              </svg>
-              <span>Rank</span>
-            </button>
-            <button type="button">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="8" r="4" />
-                <path d="M4 21a8 8 0 0 1 16 0" />
-              </svg>
-              <span>Profile</span>
-            </button>
-          </nav>
+          </header>
+
+          <section class="hero-card group-hero">
+            <div class="hero-copy">
+              <span class="section-label">Groep status</span>
+              <h1>2 mensen moeten nog checken</h1>
+              <p>Stuur nu een reminder of open je eigen live check. Iedereen ziet de status.</p>
+            </div>
+            <button class="primary-button" id="send-reminder" type="button">Stuur reminder</button>
+          </section>
+
+          <section class="content-card" aria-label="Groepsleden">
+            <div class="member-list" id="member-list">
+              <article class="member-row done">
+                <div class="avatar">M</div>
+                <div>
+                  <strong>Mila</strong>
+                  <span>4/4 klaar</span>
+                </div>
+                <em>Klaar</em>
+              </article>
+              <article class="member-row active">
+                <div class="avatar">Y</div>
+                <div>
+                  <strong>Jij</strong>
+                  <span id="group-user-status">2/4 klaar</span>
+                </div>
+                <em>Nu</em>
+              </article>
+              <article class="member-row warning">
+                <div class="avatar danger">T</div>
+                <div>
+                  <strong>Timothy</strong>
+                  <span>42 min over</span>
+                </div>
+                <em>Risico</em>
+              </article>
+              <article class="member-row">
+                <div class="avatar">L</div>
+                <div>
+                  <strong>Layo</strong>
+                  <span>3/4 klaar</span>
+                </div>
+                <em>Wacht</em>
+              </article>
+            </div>
+          </section>
+
+          <section class="content-card rule-card">
+            <span class="section-label">Regels</span>
+            <h2>Penalty staat aan</h2>
+            <p>Deadline 22:00. Wie niet 4/4 haalt betaalt EUR 10 naar de weekpot. Winner of the week krijgt de pot.</p>
+            <button class="secondary-button" id="edit-rules" type="button">Bekijk regels</button>
+          </section>
         </section>
 
         <section class="screen" id="screen-camera" aria-labelledby="camera-title">
           <div class="camera-stage">
-            <video
-              class="camera-video"
-              id="camera-video"
-              autoplay
-              muted
-              playsinline
-              aria-label="Live camera preview"
-            ></video>
+            <video class="camera-video" id="camera-video" autoplay muted playsinline aria-label="Live camera preview"></video>
             <canvas class="vision-overlay" id="vision-overlay" aria-hidden="true"></canvas>
             <header class="camera-top">
-              <button class="icon-button muted" id="back-home" type="button" aria-label="Back to today">
+              <button class="icon-button muted" id="back-home" type="button" aria-label="Terug naar vandaag">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M15 18 9 12l6-6" />
                 </svg>
               </button>
-              <div class="record-state" aria-label="Live camera trace is active">
+              <div class="record-state" aria-label="Live camera trace is actief">
                 <span class="record-dot"></span>
-                <strong>Live trace</strong>
+                <strong id="camera-record-label">Live check</strong>
               </div>
-              <button class="icon-button muted" type="button" aria-label="Pause trace">
+              <button class="icon-button muted" id="pause-trace" type="button" aria-label="Pauzeer check">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M9 6v12" />
                   <path d="M15 6v12" />
@@ -329,130 +306,100 @@
               </button>
             </header>
 
-            <div class="camera-coach" aria-label="Camera setup instruction">
-              <span class="label" id="camera-step-label">Exercise 3 of 4</span>
+            <div class="camera-coach" aria-label="Camera instructie">
+              <span class="section-label" id="camera-step-label">Oefening 3 van 4</span>
               <h2 id="camera-title">Push-up hold</h2>
-              <p id="camera-instruction">Keep shoulders and hips visible. Hold steady until the trace turns complete.</p>
+              <p id="camera-instruction">Zorg dat schouders, heupen en voeten zichtbaar zijn. Houd 10 sec stabiel.</p>
             </div>
 
             <section class="vision-panel" aria-labelledby="vision-title">
-              <div>
-                <span class="label">RF-DETR vision</span>
-                <h3 id="vision-title">Camera intelligence</h3>
+              <div class="section-title row compact">
+                <div>
+                  <span class="section-label">Camera controle</span>
+                  <h3 id="vision-title">Wat ziet de app?</h3>
+                </div>
+                <span class="vision-status" id="vision-status">Demo</span>
               </div>
-              <span class="vision-status" id="vision-status">Demo mode</span>
-              <div class="vision-tags" id="vision-tags" aria-label="Detected objects">
+              <div class="vision-tags" id="vision-tags" aria-label="Gedetecteerde objecten">
                 <span>person 96%</span>
                 <span>full body 91%</span>
-                <span>live frame</span>
               </div>
-              <p id="vision-summary">RF-DETR-ready adapter is watching for person, body visibility, and workout equipment.</p>
+              <p id="vision-summary">De app checkt live frame, lichaam in beeld en beweging.</p>
             </section>
-
-            <div class="pose-skeleton" aria-hidden="true">
-              <span class="joint head"></span>
-              <span class="joint chest"></span>
-              <span class="joint hand-left"></span>
-              <span class="joint hand-right"></span>
-              <span class="joint hip"></span>
-              <span class="joint knee-left"></span>
-              <span class="joint knee-right"></span>
-              <span class="joint foot-left"></span>
-              <span class="joint foot-right"></span>
-              <span class="bone b1"></span>
-              <span class="bone b2"></span>
-              <span class="bone b3"></span>
-              <span class="bone b4"></span>
-              <span class="bone b5"></span>
-              <span class="bone b6"></span>
-              <span class="bone b7"></span>
-            </div>
 
             <section class="trace-panel" aria-labelledby="trace-panel-title">
               <div class="trace-header">
                 <div>
-                  <span class="label">Acceptance rule</span>
+                  <span class="section-label">Workout telt als</span>
                   <h2 id="trace-panel-title">10 clean seconds</h2>
-                  <p id="trace-hint">The block only counts when form, motion, and live trust stay stable.</p>
+                  <p id="trace-hint">Geen upload. Geen oude clip. Live camera of opnieuw scannen.</p>
                 </div>
-                <div class="timer-wrap" aria-label="10 seconds required">
+                <div class="timer-wrap" aria-label="10 seconden nodig">
                   <strong id="trace-timer">00:10</strong>
-                  <span>required</span>
+                  <span>nodig</span>
                 </div>
               </div>
-
-              <div class="progress-cluster">
-                <div
-                  class="trace-bar"
-                  role="progressbar"
-                  aria-label="Current exercise trace progress"
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  aria-valuenow="52"
-                >
-                  <span id="trace-fill"></span>
-                </div>
-                <div class="trace-steps" id="trace-steps" aria-hidden="true">
-                  <span class="done"></span>
-                  <span class="done"></span>
-                  <span class="active"></span>
-                  <span></span>
-                </div>
+              <div class="trace-bar" role="progressbar" aria-label="Trace voortgang" aria-valuemin="0" aria-valuemax="100" aria-valuenow="52">
+                <span id="trace-fill"></span>
               </div>
-
-              <div class="trace-metrics" aria-label="Verification metrics">
+              <div class="trace-metrics" aria-label="Controle scores">
                 <article>
-                  <span>Form</span>
+                  <span>Vorm</span>
                   <strong id="form-score">88%</strong>
                 </article>
                 <article>
-                  <span>Motion</span>
-                  <strong id="motion-score">Live</strong>
+                  <span>Live</span>
+                  <strong id="motion-score">Actief</strong>
                 </article>
                 <article>
                   <span>Trust</span>
                   <strong id="trust-score">92%</strong>
                 </article>
               </div>
-
               <div class="trace-checklist" aria-label="Live trace checklist">
-                <div class="trace-line okay">Full body visible</div>
-                <div class="trace-line okay">Rep path stable</div>
-                <div class="trace-line warning" id="angle-line">Lock shoulder angle for 10 sec</div>
+                <div class="trace-line okay">Full body zichtbaar</div>
+                <div class="trace-line okay">Beweging stabiel</div>
+                <div class="trace-line warning" id="angle-line">Schouderhoek 10 sec vasthouden</div>
               </div>
             </section>
           </div>
 
           <div class="camera-actions">
-            <button class="primary-button" id="simulate-verify" type="button">Accept this block</button>
-            <button class="secondary-button" id="switch-exercise" type="button">Scan form again</button>
+            <button class="primary-button" id="simulate-verify" type="button">Accepteer check</button>
+            <button class="secondary-button" id="switch-exercise" type="button">Scan opnieuw</button>
           </div>
         </section>
 
         <section class="screen" id="screen-rank" aria-labelledby="rank-title">
-          <header class="rank-top">
-            <button class="icon-button muted" id="close-rank" type="button" aria-label="Back to today">
+          <header class="app-header">
+            <button class="icon-button" id="close-rank" type="button" aria-label="Terug naar vandaag">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M15 18 9 12l6-6" />
               </svg>
             </button>
-            <span class="label">Weekly leaderboard</span>
+            <div>
+              <strong>Leaderboard</strong>
+              <span>Deze week</span>
+            </div>
+            <button class="icon-button" id="rank-info" type="button" aria-label="Rank uitleg">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 17v-5" />
+                <path d="M12 8h.01" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            </button>
           </header>
 
-          <section class="rank-hero">
-            <h1 id="rank-title">Verified wins only</h1>
-            <p>Only full trace-approved workouts affect streaks, rank, and payouts.</p>
-          </section>
-
-          <section class="rank-summary" aria-label="Leaderboard summary">
-            <article>
-              <span>Winner pot</span>
+          <section class="hero-card rank-hero">
+            <div class="hero-copy">
+              <span class="section-label">Winner takes pot</span>
+              <h1 id="rank-title">Alleen live checks tellen</h1>
+              <p>Geen volledige trace betekent geen punten en mogelijk penalty.</p>
+            </div>
+            <div class="hero-score">
               <strong>EUR 140</strong>
-            </article>
-            <article>
-              <span>Your position</span>
-              <strong>#2</strong>
-            </article>
+              <span>weekpot</span>
+            </div>
           </section>
 
           <ol class="leaderboard-list">
@@ -460,15 +407,15 @@
               <span class="rank-pill">1</span>
               <div>
                 <strong>Mila</strong>
-                <span>7 verified workouts</span>
+                <span>7 workouts, 0 misses</span>
               </div>
               <em>+28</em>
             </li>
             <li class="current-user">
               <span class="rank-pill">2</span>
               <div>
-                <strong>You</strong>
-                <span id="rank-user-status">6 verified workouts</span>
+                <strong>Jij</strong>
+                <span id="rank-user-status">6 workouts, 0 misses</span>
               </div>
               <em>+21</em>
             </li>
@@ -476,7 +423,7 @@
               <span class="rank-pill">3</span>
               <div>
                 <strong>Layo</strong>
-                <span>5 verified workouts</span>
+                <span>5 workouts, 1 miss</span>
               </div>
               <em>+16</em>
             </li>
@@ -484,22 +431,67 @@
               <span class="rank-pill">4</span>
               <div>
                 <strong>Timothy</strong>
-                <span>Missed an exercise window</span>
+                <span>Weakest link vandaag</span>
               </div>
               <em>-10</em>
             </li>
           </ol>
+        </section>
 
-          <section class="penalty-callout" aria-labelledby="penalty-title">
-            <span class="label">Penalty logic</span>
-            <h2 id="penalty-title">Incomplete trace means no workout credit.</h2>
-            <p>The group sees the miss and EUR 10 moves into the weekly pot.</p>
+        <section class="screen" id="screen-profile" aria-labelledby="profile-title">
+          <header class="app-header">
+            <button class="icon-button" id="profile-back" type="button" aria-label="Terug naar vandaag">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 18 9 12l6-6" />
+              </svg>
+            </button>
+            <div>
+              <strong id="profile-title">Profiel</strong>
+              <span>Jouw accountability setup</span>
+            </div>
+            <button class="icon-button" id="settings-button" type="button" aria-label="Instellingen">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 0 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.3 7A2 2 0 0 1 7.1 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 0 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 0 1 0 4H21a1.7 1.7 0 0 0-1.6 1Z" />
+              </svg>
+            </button>
+          </header>
+
+          <section class="hero-card profile-hero">
+            <div class="avatar large">Y</div>
+            <div class="hero-copy">
+              <span class="section-label">Jouw streak</span>
+              <h1><span id="profile-streak">11</span> dagen actief</h1>
+              <p>Vandaag nog <span id="profile-left">2</span> checks. Penalty staat aan.</p>
+            </div>
+          </section>
+
+          <section class="status-strip profile-stats" aria-label="Profiel statistieken">
+            <article>
+              <span>Workouts</span>
+              <strong id="profile-workouts">6</strong>
+            </article>
+            <article>
+              <span>Misses</span>
+              <strong>0</strong>
+            </article>
+            <article>
+              <span>Penalty</span>
+              <strong>EUR 10</strong>
+            </article>
+          </section>
+
+          <section class="content-card rule-card">
+            <span class="section-label">Payment status</span>
+            <h2>Incasso demo actief</h2>
+            <p>In productie koppel je hier Stripe/SEPA. In deze preview simuleren we de penalty flow.</p>
+            <button class="secondary-button" id="payment-button" type="button">Bekijk payment flow</button>
           </section>
         </section>
 
         <section class="screen success-screen" id="screen-success" aria-labelledby="success-title">
           <header class="success-top">
-            <button class="icon-button muted" id="success-home" type="button" aria-label="Back to today">
+            <button class="icon-button muted" id="success-home" type="button" aria-label="Terug naar vandaag">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M15 18 9 12l6-6" />
               </svg>
@@ -512,28 +504,75 @@
                 <path d="m5 12 4 4L19 6" />
               </svg>
             </span>
-            <span class="label">Workout counted</span>
-            <h1 id="success-title">All 4 checks passed</h1>
-            <p>Your streak is protected and the group feed now shows the verified workout.</p>
-
-            <div class="success-summary">
+            <span class="section-label">Workout telt</span>
+            <h1 id="success-title">4/4 checks gehaald</h1>
+            <p>Je streak is beschermd. De groep ziet dat je workout verified is.</p>
+            <div class="status-strip success-summary">
               <article>
                 <span>Streak</span>
-                <strong id="success-streak">12 days</strong>
+                <strong id="success-streak">12</strong>
               </article>
               <article>
                 <span>Penalty</span>
                 <strong>EUR 0</strong>
               </article>
             </div>
-
-            <button class="primary-button" id="success-rank" type="button">View leaderboard</button>
-            <button class="secondary-button" id="success-back" type="button">Back to today</button>
+            <button class="primary-button" id="success-rank" type="button">Bekijk rank</button>
+            <button class="secondary-button" id="success-back" type="button">Terug naar vandaag</button>
           </section>
+        </section>
+
+        <nav class="bottom-nav" aria-label="Hoofdnavigatie">
+          <button class="active" data-screen-target="home" type="button" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 10.5 12 4l8 6.5V20H4z" />
+              <path d="M9 20v-6h6v6" />
+            </svg>
+            <span>Vandaag</span>
+          </button>
+          <button data-screen-target="group" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M16 11a4 4 0 1 0-8 0" />
+              <path d="M3 21a7 7 0 0 1 18 0" />
+            </svg>
+            <span>Groep</span>
+          </button>
+          <button class="primary-nav" id="nav-verify" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+            <span>Check</span>
+          </button>
+          <button data-screen-target="rank" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 19V9" />
+              <path d="M12 19V5" />
+              <path d="M19 19v-7" />
+            </svg>
+            <span>Rank</span>
+          </button>
+          <button data-screen-target="profile" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21a8 8 0 0 1 16 0" />
+            </svg>
+            <span>Profiel</span>
+          </button>
+        </nav>
+
+        <section class="action-sheet" id="action-sheet" aria-live="polite" aria-hidden="true">
+          <div class="sheet-panel">
+            <span class="section-label" id="sheet-label">Update</span>
+            <h2 id="sheet-title">Actie uitgevoerd</h2>
+            <p id="sheet-message">Je actie is verwerkt.</p>
+            <button class="primary-button" id="sheet-primary" type="button">Ok</button>
+            <button class="text-button" id="sheet-secondary" type="button">Sluiten</button>
+          </div>
         </section>
       </section>
     </main>
 
-    <script src="./script.js?v=12"></script>
+    <script src="./script.js?v=13"></script>
   </body>
 </html>
