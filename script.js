@@ -4,6 +4,8 @@ const screens = {
   camera: document.querySelector("#screen-camera"),
   rank: document.querySelector("#screen-rank"),
   profile: document.querySelector("#screen-profile"),
+  billing: document.querySelector("#screen-billing"),
+  create: document.querySelector("#screen-create"),
   success: document.querySelector("#screen-success"),
 };
 
@@ -18,6 +20,8 @@ const state = {
   visionMode: "demo",
   cameraPaused: false,
   sheetAction: null,
+  paymentSetup: false,
+  feeDestination: "platform",
 };
 
 const localVisionEndpoint = ["localhost", "127.0.0.1"].includes(window.location.hostname)
@@ -212,7 +216,7 @@ function updateHome() {
     "#mission-copy",
     left === 0
       ? "Je workout telt. Je streak is beschermd en de groep ziet je verified check-in."
-      : `Maak oefening ${state.activeExerciseIndex + 1} van 4 af voor 22:00. Penalty bij missen: EUR 10.`,
+      : `Maak oefening ${state.activeExerciseIndex + 1} van 4 af voor 22:00. Commitment fee bij missen: EUR 10.`,
   );
   setText("#home-title", left === 0 ? "Workout telt vandaag" : `Nog ${left} check${left === 1 ? "" : "s"} tot je workout telt`);
   setText("#main-cta-label", left === 0 ? "Bekijk resultaat" : `Start oefening ${state.activeExerciseIndex + 1}`);
@@ -591,6 +595,98 @@ function scanAgain() {
   setLiveStatus("Scan opnieuw uitgevoerd");
 }
 
+function destinationLabel() {
+  if (state.feeDestination === "perks") return "team perks";
+  if (state.feeDestination === "cash") return "cash winnaar";
+  return "platform fee";
+}
+
+function syncPaymentModel() {
+  document.querySelectorAll(".model-option").forEach((button) => {
+    const active = button.dataset.model === state.feeDestination;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+
+  setText("#payment-status-pill", state.paymentSetup ? "Toestemming" : "Demo");
+  setText(
+    "#setup-mandate-copy",
+    state.paymentSetup
+      ? "Demo-toestemming staat aan. In productie loopt dit via Stripe Checkout/SetupIntent."
+      : "Gebruiker moet expliciet akkoord geven voor latere fees.",
+  );
+
+  const mandateRow = document.querySelector("#setup-mandate-row");
+  if (mandateRow) {
+    mandateRow.classList.toggle("done", state.paymentSetup);
+    mandateRow.classList.toggle("active", !state.paymentSetup);
+  }
+}
+
+function chooseFeeDestination(model) {
+  if (model === "cash" || model === "perks") {
+    const title = model === "cash" ? "Cash naar winnaar staat uit" : "Team perks blijven locked";
+    showSheet({
+      label: "Geblokkeerd",
+      title,
+      message:
+        "Voor de beta gebruiken we geen pot, wallet of doorbetaling. Eerst legal/payment review, daarna pas non-cash perks of payouts.",
+      primary: "Gebruik platform fee",
+      onPrimary: () => chooseFeeDestination("platform"),
+    });
+    return;
+  }
+
+  state.feeDestination = model;
+  syncPaymentModel();
+  showSheet({
+    label: "Model gekozen",
+    title: `Miss fees worden ${destinationLabel()}`,
+    message: "De app blijft streng, maar vermijdt potten, wallets en cashprijzen voor deelnemers.",
+  });
+}
+
+function setupPaymentPermission() {
+  state.paymentSetup = true;
+  syncPaymentModel();
+  showSheet({
+    label: "Stripe demo",
+    title: "Betaaltoestemming gesimuleerd",
+    message:
+      "Echte app: Stripe Billing voor abonnement, Checkout/SetupIntent voor toestemming, webhook bij gemiste check.",
+  });
+}
+
+function simulateMissFee() {
+  const ledger = document.querySelector("#ledger-list");
+  if (ledger) {
+    const row = document.createElement("article");
+    row.innerHTML = `
+      <span>Nu</span>
+      <strong>Timothy miss fee verwerkt als ${destinationLabel()}</strong>
+      <em>EUR 10</em>
+    `;
+    ledger.prepend(row);
+  }
+
+  addFeedItem("Timothy miste de deadline", `EUR 10 ${destinationLabel()}, geen pot`, "bad");
+  showSheet({
+    label: "Miss verwerkt",
+    title: "Ledger bijgewerkt",
+    message: `De groep ziet de miss. De fee wordt ${destinationLabel()} en wordt niet cash uitgekeerd aan een winnaar.`,
+  });
+}
+
+function updateInvitePreview() {
+  const name = document.querySelector("#group-name-input")?.value || "Nieuwe groep";
+  const deadline = document.querySelector("#deadline-input")?.value || "22:00";
+  const fee = document.querySelector("#fee-input")?.value || "EUR 10";
+  const destination = document.querySelector("#destination-input")?.value || "Platform fee, geen cash-out";
+
+  setText("#invite-preview-title", name);
+  setText("#invite-preview-copy", `Daily 4/4 live checks. Deadline ${deadline}. Fee ${fee} als ${destination.toLowerCase()}.`);
+}
+
 document.querySelector("#open-camera").addEventListener("click", openCamera);
 document.querySelector("#open-camera-secondary").addEventListener("click", openCamera);
 document.querySelector("#current-exercise-row").addEventListener("click", openCamera);
@@ -610,17 +706,21 @@ document.querySelector("#home-group-action").addEventListener("click", () => sho
 document.querySelector("#home-rank-action").addEventListener("click", () => showScreen("rank"));
 document.querySelector("#home-penalty-action").addEventListener("click", () => {
   showSheet({
-    label: "Penalty",
+    label: "Regels",
     title: "Mis je, dan ziet de groep het",
-    message: "Bij minder dan 4 live checks voor 22:00 gaat EUR 10 naar de weekpot. De status komt in de feed.",
+    message: "Bij minder dan 4 live checks voor 22:00 geldt EUR 10 platform fee. Geen pot, wallet of cash-out in de beta.",
+    primary: "Open betaalmodel",
+    onPrimary: () => showScreen("billing"),
   });
 });
 
 document.querySelector("#menu-button").addEventListener("click", () => {
   showSheet({
     label: "Menu",
-    title: "Alles zit nu in de onderste navigatie",
-    message: "Vandaag, Groep, Check, Rank en Profiel zijn allemaal werkende schermen in deze preview.",
+    title: "Maak of beheer je groep",
+    message: "De beta heeft nu werkende schermen voor vandaag, groep, check, rank, profiel en betaalmodel.",
+    primary: "Maak groep",
+    onPrimary: () => showScreen("create"),
   });
 });
 
@@ -628,7 +728,7 @@ document.querySelector("#notifications-button").addEventListener("click", () => 
   showSheet({
     label: "Meldingen",
     title: "Timothy is bijna te laat",
-    message: "42 minuten tot penalty. In productie wordt dit een push-notification naar de groep.",
+    message: "42 minuten tot commitment fee. In productie wordt dit een push-notification naar de groep.",
     primary: "Open groep",
     onPrimary: () => showScreen("group"),
   });
@@ -661,7 +761,10 @@ document.querySelector("#edit-rules").addEventListener("click", () => {
   showSheet({
     label: "Regels",
     title: "Daily check-in, 4 oefeningen",
-    message: "Deadline 22:00. Penalty EUR 10. Winner of the week krijgt de pot. Alleen live camera checks tellen.",
+    message:
+      "Deadline 22:00. Platform fee EUR 10 bij minder dan 4/4. Winnaars krijgen rank en perks, geen cashprijs.",
+    primary: "Open betaalmodel",
+    onPrimary: () => showScreen("billing"),
   });
 });
 
@@ -677,16 +780,54 @@ document.querySelector("#settings-button").addEventListener("click", () => {
   showSheet({
     label: "Instellingen",
     title: "Demo instellingen",
-    message: "Hier komen penalty bedrag, check-in tijden, betaalmethode en privacy instellingen.",
+    message: "Hier komen fee bedrag, check-in tijden, betaalmethode en privacy instellingen.",
   });
 });
 
 document.querySelector("#payment-button").addEventListener("click", () => {
+  showScreen("billing");
+});
+
+document.querySelector("#billing-back").addEventListener("click", () => showScreen("profile"));
+document.querySelector("#billing-help").addEventListener("click", () => {
   showSheet({
-    label: "Payment",
-    title: "Payment flow is demo",
-    message: "Voor echte automatische incasso is straks Stripe/SEPA setup en expliciete toestemming nodig.",
+    label: "Betaalmodel",
+    title: "Waarom geen cashpot?",
+    message:
+      "Cashprijzen kunnen gambling/payment review triggeren. Daarom start de beta met abonnement, platform fee en transparante ledger zonder cash-out.",
   });
+});
+document.querySelector("#setup-payment").addEventListener("click", setupPaymentPermission);
+document.querySelector("#simulate-miss-fee").addEventListener("click", simulateMissFee);
+
+document.querySelectorAll(".model-option").forEach((button) => {
+  button.addEventListener("click", () => chooseFeeDestination(button.dataset.model));
+});
+
+document.querySelector("#create-back").addEventListener("click", () => showScreen("home"));
+document.querySelector("#create-help").addEventListener("click", () => {
+  showSheet({
+    label: "Groep maken",
+    title: "Hou setup super simpel",
+    message: "Voor de beta: 3-10 leden, 4 live checks, deadline, fee bestemming. Meer opties komen later.",
+  });
+});
+document.querySelector("#create-group-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const name = document.querySelector("#group-name-input").value.trim() || "Nieuwe groep";
+  setText("#group-title", name);
+  showSheet({
+    label: "Groep live",
+    title: `${name} is aangemaakt`,
+    message: "Invite link, regels en betaalmodel staan klaar voor de beta.",
+    primary: "Open groep",
+    onPrimary: () => showScreen("group"),
+  });
+});
+
+document.querySelectorAll("#group-name-input, #deadline-input, #fee-input, #destination-input").forEach((field) => {
+  field.addEventListener("input", updateInvitePreview);
+  field.addEventListener("change", updateInvitePreview);
 });
 
 document.querySelector("#pause-trace").addEventListener("click", () => {
@@ -718,8 +859,19 @@ document.querySelectorAll(".exercise-row[data-exercise-index]").forEach((row) =>
   row.addEventListener("click", () => handleExerciseClick(Number(row.dataset.exerciseIndex)));
 });
 
+window.addEventListener("hashchange", () => {
+  const nextScreen = location.hash.replace("#", "");
+  if (screens[nextScreen]) {
+    showScreen(nextScreen);
+    return;
+  }
+  showScreen("home");
+});
+
 updateHome();
 updateCamera();
+syncPaymentModel();
+updateInvitePreview();
 
 const initialScreen = location.hash.replace("#", "");
 if (screens[initialScreen]) {

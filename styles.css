@@ -16,6 +16,7 @@
   --red: #d72f1f;
   --red-soft: #fff0ef;
   --shadow: 0 18px 48px rgba(5, 5, 5, 0.16);
+  --nav-zone: 104px;
   --radius-sm: 12px;
   --radius-md: 16px;
   --radius-lg: 22px;
@@ -111,12 +112,12 @@ svg {
 
 .screen {
   position: absolute;
-  inset: 0;
+  inset: 0 0 var(--nav-zone);
   display: none;
   flex-direction: column;
   width: 100%;
   max-width: 100%;
-  padding: 0 18px 108px;
+  padding: 0 18px 18px;
   overflow-x: hidden;
   overflow-y: auto;
   background: var(--soft);
@@ -316,6 +317,10 @@ svg {
   border: 1px solid var(--line-strong);
   background: #fff;
   color: var(--black);
+}
+
+.full-width {
+  width: 100%;
 }
 
 .text-button {
@@ -685,7 +690,9 @@ svg {
 
 .group-hero,
 .rank-hero,
-.profile-hero {
+.profile-hero,
+.billing-hero,
+.create-hero {
   background: var(--black);
 }
 
@@ -706,6 +713,135 @@ svg {
 .rule-card .secondary-button {
   width: 100%;
   margin-top: 14px;
+}
+
+.model-options,
+.setup-list,
+.ledger-list,
+.create-form {
+  display: grid;
+  gap: 10px;
+}
+
+.model-option {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  min-height: 78px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  text-align: left;
+}
+
+.model-option strong,
+.setup-row strong,
+.ledger-list strong,
+.create-form span {
+  color: var(--black);
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.model-option span,
+.setup-row small,
+.create-form input,
+.create-form select,
+.invite-preview p {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.model-option.active {
+  border-color: rgba(255, 90, 0, 0.42);
+  background: var(--orange-soft);
+}
+
+.model-option.locked {
+  border-style: dashed;
+  opacity: 0.82;
+}
+
+.setup-row,
+.ledger-list article {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  min-height: 68px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.setup-row.done {
+  border-color: rgba(22, 138, 58, 0.22);
+  background: var(--green-soft);
+}
+
+.setup-row.active {
+  border-color: rgba(255, 90, 0, 0.38);
+  background: var(--orange-soft);
+}
+
+.ledger-list article {
+  grid-template-columns: minmax(0, 64px) minmax(0, 1fr) auto;
+}
+
+.ledger-list span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.ledger-list strong {
+  overflow-wrap: anywhere;
+}
+
+.ledger-list em {
+  justify-self: end;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.create-form {
+  margin-top: 14px;
+}
+
+.create-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.create-form input,
+.create-form select {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 15px;
+  background: #fff;
+  color: var(--black);
+  font: inherit;
+}
+
+.create-form input:focus,
+.create-form select:focus {
+  outline: 3px solid rgba(255, 90, 0, 0.24);
+  outline-offset: 2px;
 }
 
 .camera-stage {

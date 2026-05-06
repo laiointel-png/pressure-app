@@ -1,6 +1,16 @@
 # Pressure
 
-Mobile-first prototype for an accountability social app where friends keep each other consistent through check-ins, streaks, penalties, and group pressure.
+Mobile-first prototype for an accountability social app where friends keep each other consistent through live camera checks, streaks, commitment fees, and group pressure.
+
+Live preview: https://laiointel-png.github.io/pressure-app/
+
+## Current MVP direction
+
+- Basic-Fit-inspired orange/black/white mobile UI
+- Working Today, Group, Check, Rank, Profile, Payment Model, and Create Group screens
+- RF-DETR-ready live camera verification adapter with demo fallback
+- Payment-safe beta model: subscription + platform miss fee, no cash pot, no wallet, no winner payout
+- Group creation form, payment model choices, setup simulation, and transparent fee ledger
 
 ## Preview locally
 
@@ -28,6 +38,19 @@ The camera screen includes a RF-DETR-ready vision adapter:
 - Local demo detector when the backend is unavailable or returns no detections
 
 See `docs/rfdetr-integration.md` and `backend/rfdetr_api_example.py`.
+
+## Payment model
+
+The beta intentionally does not use "winner gets the pot". The safer direction is:
+
+- Stripe Billing subscription for app access
+- Explicit saved payment method for future miss fees
+- Miss fees as platform commitment fees
+- Rank/perks for winners without cash-out
+
+See `docs/payment-strategy.md`.
+
+Backend sketch: `backend/payment_api_example.py` has the Stripe endpoints for Checkout subscription, saved payment method setup, miss-fee charge, and webhook handling.
 
 ## GitHub Pages
 

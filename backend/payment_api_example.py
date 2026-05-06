@@ -1,0 +1,173 @@
+"""Stripe payment API sketch for the Pressure beta model.
+
+Install:
+    .venv/bin/python -m pip install fastapi uvicorn stripe
+
+Run:
+    STRIPE_SECRET_KEY=sk_test_... \
+    PRESSURE_PASS_PRICE_ID=price_... \
+    PRESSURE_APP_URL=http://localhost:5173 \
+    .venv/bin/python -m uvicorn backend.payment_api_example:app --port 8001
+
+This file models the safer beta payment approach:
+subscription + platform miss fee + transparent ledger.
+It intentionally does not implement pooled pots, wallets, or winner payouts.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
+try:
+    import stripe
+except ImportError:  # pragma: no cover - local dependency is optional for the prototype.
+    stripe = None
+
+
+STRIPE_API_VERSION = "2026-02-25.clover"
+APP_URL = os.getenv("PRESSURE_APP_URL", "http://localhost:5173")
+
+app = FastAPI(title="Pressure Payment API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+
+class CheckoutRequest(BaseModel):
+    user_id: str
+    email: str
+
+
+class SetupRequest(BaseModel):
+    stripe_customer_id: str
+
+
+class MissFeeRequest(BaseModel):
+    stripe_customer_id: str
+    payment_method_id: str
+    user_id: str
+    group_id: str
+    amount_cents: int = Field(default=1000, ge=100, le=5000)
+    reason: str = "missed_live_checks"
+
+
+def stripe_client_ready() -> bool:
+    if stripe is None:
+        return False
+    stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+    stripe.api_version = STRIPE_API_VERSION
+    return bool(stripe.api_key)
+
+
+def demo_response(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "mode": "demo",
+        "kind": kind,
+        "message": "Set STRIPE_SECRET_KEY and install stripe to create real Stripe objects.",
+        **payload,
+    }
+
+
+@app.get("/api/payments/health")
+def health() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "stripe_ready": stripe_client_ready(),
+        "api_version": STRIPE_API_VERSION,
+        "model": "subscription_plus_platform_miss_fee",
+        "cash_payouts_enabled": False,
+    }
+
+
+@app.post("/api/payments/pass-checkout")
+def create_pass_checkout(payload: CheckoutRequest) -> dict[str, Any]:
+    price_id = os.getenv("PRESSURE_PASS_PRICE_ID")
+    if not stripe_client_ready() or not price_id:
+        return demo_response(
+            "subscription_checkout",
+            {"checkout_url": f"{APP_URL}/#billing", "price_id": price_id or "price_demo"},
+        )
+
+    session = stripe.checkout.Session.create(
+        mode="subscription",
+        customer_email=payload.email,
+        line_items=[{"price": price_id, "quantity": 1}],
+        success_url=f"{APP_URL}/#billing",
+        cancel_url=f"{APP_URL}/#profile",
+        metadata={"pressure_user_id": payload.user_id, "product": "pressure_pass"},
+    )
+    return {"mode": "stripe", "checkout_url": session.url, "session_id": session.id}
+
+
+@app.post("/api/payments/setup-mandate")
+def create_setup_intent(payload: SetupRequest) -> dict[str, Any]:
+    if not stripe_client_ready():
+        return demo_response("setup_intent", {"client_secret": "seti_demo_secret"})
+
+    intent = stripe.SetupIntent.create(
+        customer=payload.stripe_customer_id,
+        usage="off_session",
+        metadata={"purpose": "future_pressure_miss_fees"},
+    )
+    return {"mode": "stripe", "client_secret": intent.client_secret, "setup_intent_id": intent.id}
+
+
+@app.post("/api/payments/miss-fee")
+def charge_miss_fee(payload: MissFeeRequest) -> dict[str, Any]:
+    if not stripe_client_ready():
+        return demo_response(
+            "miss_fee",
+            {
+                "ledger_status": "simulated",
+                "amount_cents": payload.amount_cents,
+                "cash_payout_created": False,
+            },
+        )
+
+    intent = stripe.PaymentIntent.create(
+        amount=payload.amount_cents,
+        currency="eur",
+        customer=payload.stripe_customer_id,
+        payment_method=payload.payment_method_id,
+        off_session=True,
+        confirm=True,
+        description="Pressure platform miss fee",
+        metadata={
+            "pressure_user_id": payload.user_id,
+            "pressure_group_id": payload.group_id,
+            "reason": payload.reason,
+            "cash_payout_created": "false",
+        },
+    )
+    return {
+        "mode": "stripe",
+        "payment_intent_id": intent.id,
+        "status": intent.status,
+        "cash_payout_created": False,
+    }
+
+
+@app.post("/api/payments/webhook")
+async def stripe_webhook(request: Request) -> dict[str, Any]:
+    raw_body = await request.body()
+    signature = request.headers.get("stripe-signature")
+    secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+    if not stripe_client_ready() or not secret or not signature:
+        return demo_response("webhook", {"received_bytes": len(raw_body)})
+
+    try:
+        event = stripe.Webhook.construct_event(raw_body, signature, secret)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    return {"received": True, "event_type": event["type"]}

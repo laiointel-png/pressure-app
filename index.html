@@ -18,7 +18,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050505'/%3E%3Cpath d='M18 42 44 16' stroke='%23ff5a00' stroke-width='9' stroke-linecap='round'/%3E%3Cpath d='M20 20h20v20H20z' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="./styles.css?v=13" />
+    <link rel="stylesheet" href="./styles.css?v=14" />
   </head>
   <body>
     <main class="app-shell">
@@ -54,7 +54,7 @@
             <div class="hero-copy">
               <span class="section-label">Vandaag</span>
               <h1 id="home-title">Nog 2 checks tot je workout telt</h1>
-              <p id="mission-copy">Maak oefening 3 en 4 af voor 22:00. Mis je een check, dan gaat EUR 10 naar de pot.</p>
+              <p id="mission-copy">Maak oefening 3 en 4 af voor 22:00. Mis je een check, dan activeert je commitment fee.</p>
             </div>
             <div class="hero-score" aria-label="Voortgang vandaag">
               <strong id="hero-check-count">2/4</strong>
@@ -75,8 +75,8 @@
               <strong>22:00</strong>
             </article>
             <article>
-              <span>Pot</span>
-              <strong>EUR 140</strong>
+              <span>Fee</span>
+              <strong>EUR 10</strong>
             </article>
             <article>
               <span>Rank</span>
@@ -130,8 +130,8 @@
                   <path d="M10.3 4.5 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.5a2 2 0 0 0-3.4 0Z" />
                 </svg>
               </span>
-              <strong>Penalty</strong>
-              <small>Regels</small>
+              <strong>Regels</strong>
+              <small>Fee model</small>
             </button>
           </section>
 
@@ -182,7 +182,7 @@
           <section class="content-card penalty-card" aria-labelledby="penalty-home-title">
             <span class="section-label">Als je mist</span>
             <h2 id="penalty-home-title">Geen check is geen workout</h2>
-            <p>De groep ziet de miss. EUR 10 gaat automatisch naar de weekpot. Simpel, zichtbaar, duidelijk.</p>
+            <p>De groep ziet de miss. EUR 10 wordt platform commitment fee. Geen pot, wallet of cashprijs in de MVP.</p>
           </section>
 
           <section class="content-card" aria-labelledby="feed-title">
@@ -203,7 +203,7 @@
                 <div class="avatar danger">T</div>
                 <div>
                   <strong>Timothy mist bijna</strong>
-                  <span>42 min over voor penalty</span>
+                  <span>42 min tot commitment fee</span>
                 </div>
                 <small>14m</small>
               </article>
@@ -278,8 +278,8 @@
 
           <section class="content-card rule-card">
             <span class="section-label">Regels</span>
-            <h2>Penalty staat aan</h2>
-            <p>Deadline 22:00. Wie niet 4/4 haalt betaalt EUR 10 naar de weekpot. Winner of the week krijgt de pot.</p>
+            <h2>Commitment fee staat aan</h2>
+            <p>Deadline 22:00. Wie niet 4/4 haalt betaalt EUR 10 als platform fee. Winnaars krijgen rank en perks, geen cash-out.</p>
             <button class="secondary-button" id="edit-rules" type="button">Bekijk regels</button>
           </section>
         </section>
@@ -392,13 +392,13 @@
 
           <section class="hero-card rank-hero">
             <div class="hero-copy">
-              <span class="section-label">Winner takes pot</span>
+              <span class="section-label">Rank zonder cashprijs</span>
               <h1 id="rank-title">Alleen live checks tellen</h1>
-              <p>Geen volledige trace betekent geen punten en mogelijk penalty.</p>
+              <p>Geen volledige trace betekent geen punten en mogelijk commitment fee.</p>
             </div>
             <div class="hero-score">
-              <strong>EUR 140</strong>
-              <span>weekpot</span>
+              <strong>Perks</strong>
+              <span>geen cash-out</span>
             </div>
           </section>
 
@@ -462,7 +462,7 @@
             <div class="hero-copy">
               <span class="section-label">Jouw streak</span>
               <h1><span id="profile-streak">11</span> dagen actief</h1>
-              <p>Vandaag nog <span id="profile-left">2</span> checks. Penalty staat aan.</p>
+              <p>Vandaag nog <span id="profile-left">2</span> checks. Commitment staat aan.</p>
             </div>
           </section>
 
@@ -476,16 +476,202 @@
               <strong>0</strong>
             </article>
             <article>
-              <span>Penalty</span>
+              <span>Fee</span>
               <strong>EUR 10</strong>
             </article>
           </section>
 
           <section class="content-card rule-card">
-            <span class="section-label">Payment status</span>
-            <h2>Incasso demo actief</h2>
-            <p>In productie koppel je hier Stripe/SEPA. In deze preview simuleren we de penalty flow.</p>
-            <button class="secondary-button" id="payment-button" type="button">Bekijk payment flow</button>
+            <span class="section-label">Betaalstatus</span>
+            <h2>Veilig MVP-model</h2>
+            <p>Abonnement voor de app. Miss fees zijn platform fees, geen pot en geen cashprijs voor winnaars.</p>
+            <button class="secondary-button" id="payment-button" type="button">Open betaalmodel</button>
+          </section>
+        </section>
+
+        <section class="screen" id="screen-billing" aria-labelledby="billing-title">
+          <header class="app-header">
+            <button class="icon-button" id="billing-back" type="button" aria-label="Terug naar profiel">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 18 9 12l6-6" />
+              </svg>
+            </button>
+            <div>
+              <strong id="billing-title">Betaalmodel</strong>
+              <span>Abonnement + commitment</span>
+            </div>
+            <button class="icon-button" id="billing-help" type="button" aria-label="Betaalmodel uitleg">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 17v-5" />
+                <path d="M12 8h.01" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            </button>
+          </header>
+
+          <section class="hero-card billing-hero">
+            <div class="hero-copy">
+              <span class="section-label">Aanbevolen voor beta</span>
+              <h1>Geen gokken. Wel echte druk.</h1>
+              <p>We vermijden potten en cashprijzen. Gebruikers betalen voor toegang en spreken vooraf een miss fee af.</p>
+            </div>
+          </section>
+
+          <section class="status-strip billing-stats" aria-label="Betaalstatus">
+            <article>
+              <span>Pass</span>
+              <strong>EUR 7.99</strong>
+            </article>
+            <article>
+              <span>Miss fee</span>
+              <strong>EUR 10</strong>
+            </article>
+            <article>
+              <span>Cash-out</span>
+              <strong>Uit</strong>
+            </article>
+          </section>
+
+          <section class="content-card" aria-labelledby="billing-choice-title">
+            <div class="section-title">
+              <span class="section-label">Waar gaat de fee heen?</span>
+              <h2 id="billing-choice-title">Start met het veilige model</h2>
+            </div>
+            <div class="model-options" role="list">
+              <button class="model-option active" type="button" data-model="platform">
+                <strong>Platform fee</strong>
+                <span>Geen pot, wallet of doorbetaling. De fee hoort bij de dienst.</span>
+              </button>
+              <button class="model-option locked" type="button" data-model="perks">
+                <strong>Team perks</strong>
+                <span>Later: capped, non-cash credit voor merch/coaching na legal review.</span>
+              </button>
+              <button class="model-option locked" type="button" data-model="cash">
+                <strong>Cash winnaar</strong>
+                <span>Geblokkeerd tot legal, KYC en payment review klaar zijn.</span>
+              </button>
+            </div>
+          </section>
+
+          <section class="content-card" aria-labelledby="payment-setup-title">
+            <div class="section-title row">
+              <div>
+                <span class="section-label">Stripe setup</span>
+                <h2 id="payment-setup-title">3 stappen tot echte betaling</h2>
+              </div>
+              <span class="small-pill" id="payment-status-pill">Demo</span>
+            </div>
+            <div class="setup-list">
+              <article class="setup-row done">
+                <span class="step-badge">01</span>
+                <div>
+                  <strong>Pressure Pass</strong>
+                  <small>Stripe Billing abonnement voor app-toegang.</small>
+                </div>
+              </article>
+              <article class="setup-row active" id="setup-mandate-row">
+                <span class="step-badge">02</span>
+                <div>
+                  <strong>SEPA/card toestemming</strong>
+                  <small id="setup-mandate-copy">Gebruiker moet expliciet akkoord geven voor latere fees.</small>
+                </div>
+              </article>
+              <article class="setup-row">
+                <span class="step-badge">03</span>
+                <div>
+                  <strong>Webhook bij miss</strong>
+                  <small>Backend maakt pas een charge wanneer deadline faalt.</small>
+                </div>
+              </article>
+            </div>
+            <button class="primary-button full-width" id="setup-payment" type="button">Simuleer betaaltoestemming</button>
+          </section>
+
+          <section class="content-card" aria-labelledby="ledger-title">
+            <div class="section-title row">
+              <div>
+                <span class="section-label">Ledger demo</span>
+                <h2 id="ledger-title">Transparant voor de groep</h2>
+              </div>
+              <button class="text-button" id="simulate-miss-fee" type="button">Simuleer miss</button>
+            </div>
+            <div class="ledger-list" id="ledger-list">
+              <article>
+                <span>Vandaag</span>
+                <strong>Mila verified 4/4</strong>
+                <em>EUR 0</em>
+              </article>
+              <article>
+                <span>Gisteren</span>
+                <strong>Layo miss fee verwerkt</strong>
+                <em>EUR 10</em>
+              </article>
+            </div>
+          </section>
+        </section>
+
+        <section class="screen" id="screen-create" aria-labelledby="create-title">
+          <header class="app-header">
+            <button class="icon-button" id="create-back" type="button" aria-label="Terug naar vandaag">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 18 9 12l6-6" />
+              </svg>
+            </button>
+            <div>
+              <strong id="create-title">Groep maken</strong>
+              <span>2 minuten setup</span>
+            </div>
+            <button class="icon-button" id="create-help" type="button" aria-label="Groep maken uitleg">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 17v-5" />
+                <path d="M12 8h.01" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            </button>
+          </header>
+
+          <section class="hero-card create-hero">
+            <div class="hero-copy">
+              <span class="section-label">Nieuwe groep</span>
+              <h1>Maak de regels eerst duidelijk.</h1>
+              <p>Naam, checkmoment, vier oefeningen en fee-model staan vast voordat iemand joined.</p>
+            </div>
+          </section>
+
+          <form class="content-card create-form" id="create-group-form">
+            <label>
+              <span>Groepsnaam</span>
+              <input id="group-name-input" type="text" value="Team Iron Pact" autocomplete="off" />
+            </label>
+            <label>
+              <span>Deadline</span>
+              <select id="deadline-input">
+                <option>22:00</option>
+                <option>20:00</option>
+                <option>08:00</option>
+              </select>
+            </label>
+            <label>
+              <span>Commitment fee</span>
+              <select id="fee-input">
+                <option>EUR 10</option>
+                <option>EUR 5</option>
+                <option>EUR 20</option>
+              </select>
+            </label>
+            <label>
+              <span>Fee bestemming</span>
+              <select id="destination-input">
+                <option>Platform fee, geen cash-out</option>
+                <option>Team perks later</option>
+              </select>
+            </label>
+            <button class="primary-button full-width" type="submit">Maak groep live</button>
+          </form>
+          <section class="content-card invite-preview">
+            <span class="section-label">Invite preview</span>
+            <h2 id="invite-preview-title">Team Iron Pact</h2>
+            <p id="invite-preview-copy">Daily 4/4 live checks. Deadline 22:00. Fee EUR 10 als platform fee.</p>
           </section>
         </section>
 
@@ -513,7 +699,7 @@
                 <strong id="success-streak">12</strong>
               </article>
               <article>
-                <span>Penalty</span>
+                <span>Fee</span>
                 <strong>EUR 0</strong>
               </article>
             </div>
@@ -573,6 +759,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=13"></script>
+    <script src="./script.js?v=14"></script>
   </body>
 </html>
