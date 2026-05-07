@@ -150,6 +150,39 @@ function normalizeApiBase(value) {
   return trimmed.replace(/\/+$/, "");
 }
 
+function buildJoinInviteLink({ groupId, apiBase = "" } = {}) {
+  const joinCode = String(groupId || "").trim();
+  if (!joinCode) return "";
+
+  const url = new URL(window.location.href);
+  url.searchParams.set("join", joinCode);
+
+  const normalizedApiBase = normalizeApiBase(apiBase);
+  const includeApiBase = normalizedApiBase && !/localhost|127\.0\.0\.1/i.test(normalizedApiBase);
+  if (includeApiBase) {
+    url.searchParams.set("apiBase", normalizedApiBase);
+  } else {
+    url.searchParams.delete("apiBase");
+  }
+
+  url.hash = "#onboard";
+  return url.toString();
+}
+
+function consumeJoinInviteFromUrl() {
+  const url = new URL(window.location.href);
+  const join = url.searchParams.get("join")?.trim() || "";
+  const apiBase = normalizeApiBase(url.searchParams.get("apiBase") || url.searchParams.get("api") || "");
+  if (!join) return null;
+
+  url.searchParams.delete("join");
+  url.searchParams.delete("apiBase");
+  url.searchParams.delete("api");
+  history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+
+  return { join, apiBase };
+}
+
 const api = {
   get base() {
     return state.apiBase;
@@ -366,6 +399,7 @@ function resetToDemo() {
 function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
   state.onboardingMode = mode;
   state.onboardingReturnTo = returnTo;
+  const invite = state.pendingInvite;
 
   const backButton = document.querySelector("#onboard-back");
   if (backButton) backButton.classList.toggle("hidden", mode !== "edit");
@@ -387,14 +421,17 @@ function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
   if (nameField) nameField.value = state.user.name || "";
   if (emailField) emailField.value = state.user.email || "";
   if (groupField) groupField.value = state.group.name || "";
-  if (groupCodeField) groupCodeField.value = "";
+  if (groupCodeField) groupCodeField.value = invite?.join || "";
   if (deadlineField) deadlineField.value = state.group.deadline || "22:00";
   if (feeField) feeField.value = state.group.feeLabel || "EUR 10";
-  if (apiBaseField) apiBaseField.value = state.apiBase || "";
+  if (apiBaseField) apiBaseField.value = invite?.apiBase || state.apiBase || "";
 
+  if (invite?.join) state.onboardingGroupMode = "join";
+  const prefilledApiBase = normalizeApiBase(invite?.apiBase || state.apiBase || "");
   setOnboardingGroupMode(state.onboardingGroupMode || "create", { focus: false });
-  setApiStatus(state.apiBase ? "neutral" : "bad", state.apiBase ? "Ongetest" : "Offline");
+  setApiStatus(prefilledApiBase ? "neutral" : "bad", prefilledApiBase ? "Ongetest" : "Offline");
   showScreen("onboard");
+  state.pendingInvite = null;
 }
 
 function setOnboardingGroupMode(mode, { focus = true } = {}) {
@@ -1373,7 +1410,7 @@ document.querySelector("#notifications-button").addEventListener("click", () => 
 });
 
 document.querySelector("#invite-button").addEventListener("click", async () => {
-  const invite = "https://pressure.app/join/iron-pact";
+  const invite = buildJoinInviteLink({ groupId: state.group.id, apiBase: state.apiBase });
   try {
     await navigator.clipboard?.writeText(invite);
   } catch {
@@ -1382,7 +1419,7 @@ document.querySelector("#invite-button").addEventListener("click", async () => {
   showSheet({
     label: "Invite",
     title: "Invite link gekopieerd",
-    message: invite,
+    message: `Group code: ${state.group.id}\n\n${invite}`,
   });
 });
 
@@ -1765,6 +1802,8 @@ window.addEventListener("hashchange", () => {
 });
 
 hydrateFromStorage();
+const invite = consumeJoinInviteFromUrl();
+if (invite) state.pendingInvite = invite;
 if (state.apiBase) {
   // Best-effort merge backend groups without interrupting the demo UX.
   syncGroupsFromBackend({ silent: true });
@@ -1779,7 +1818,9 @@ updateCamera();
 
 const stored = loadModel();
 const initialScreen = location.hash.replace("#", "");
-if (!stored?.onboardingComplete || !stored?.user?.name) {
+if (invite?.join) {
+  enterOnboarding({ mode: "setup", returnTo: "home" });
+} else if (!stored?.onboardingComplete || !stored?.user?.name) {
   enterOnboarding({ mode: "setup", returnTo: "home" });
 } else if (screens[initialScreen]) {
   showScreen(initialScreen);
