@@ -43,6 +43,7 @@ const state = {
   feeDestination: "platform",
   onboardingMode: "setup",
   onboardingReturnTo: "home",
+  onboardingGroupMode: "create",
   sheetSecondaryAction: null,
 };
 
@@ -174,6 +175,14 @@ const api = {
 
 function setApiStatus(kind, label) {
   const pill = document.querySelector("#api-status-pill");
+  if (!pill) return;
+  pill.classList.remove("ok", "bad", "neutral");
+  pill.classList.add(kind);
+  pill.textContent = label;
+}
+
+function setStripeStatus(kind, label) {
+  const pill = document.querySelector("#stripe-health-pill");
   if (!pill) return;
   pill.classList.remove("ok", "bad", "neutral");
   pill.classList.add(kind);
@@ -370,6 +379,7 @@ function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
   const nameField = document.querySelector("#onboard-name");
   const emailField = document.querySelector("#onboard-email");
   const groupField = document.querySelector("#onboard-group-name");
+  const groupCodeField = document.querySelector("#onboard-group-code");
   const deadlineField = document.querySelector("#onboard-deadline");
   const feeField = document.querySelector("#onboard-fee");
   const apiBaseField = document.querySelector("#onboard-api-base");
@@ -377,12 +387,43 @@ function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
   if (nameField) nameField.value = state.user.name || "";
   if (emailField) emailField.value = state.user.email || "";
   if (groupField) groupField.value = state.group.name || "";
+  if (groupCodeField) groupCodeField.value = "";
   if (deadlineField) deadlineField.value = state.group.deadline || "22:00";
   if (feeField) feeField.value = state.group.feeLabel || "EUR 10";
   if (apiBaseField) apiBaseField.value = state.apiBase || "";
 
+  setOnboardingGroupMode(state.onboardingGroupMode || "create", { focus: false });
   setApiStatus(state.apiBase ? "neutral" : "bad", state.apiBase ? "Ongetest" : "Offline");
   showScreen("onboard");
+}
+
+function setOnboardingGroupMode(mode, { focus = true } = {}) {
+  const next = mode === "join" ? "join" : "create";
+  state.onboardingGroupMode = next;
+
+  const createRadio = document.querySelector("#onboard-group-mode-create");
+  const joinRadio = document.querySelector("#onboard-group-mode-join");
+  if (createRadio) createRadio.checked = next === "create";
+  if (joinRadio) joinRadio.checked = next === "join";
+
+  const createFields = document.querySelector("#onboard-create-fields");
+  const joinFields = document.querySelector("#onboard-join-fields");
+  if (createFields) createFields.classList.toggle("hidden", next !== "create");
+  if (joinFields) joinFields.classList.toggle("hidden", next !== "join");
+
+  const groupName = document.querySelector("#onboard-group-name");
+  const deadline = document.querySelector("#onboard-deadline");
+  const fee = document.querySelector("#onboard-fee");
+  const groupCode = document.querySelector("#onboard-group-code");
+
+  if (groupName) groupName.toggleAttribute("required", next === "create");
+  if (deadline) deadline.toggleAttribute("required", next === "create");
+  if (fee) fee.toggleAttribute("required", next === "create");
+  if (groupCode) groupCode.toggleAttribute("required", next === "join");
+
+  if (!focus) return;
+  if (next === "join" && groupCode instanceof HTMLElement) groupCode.focus();
+  if (next === "create" && groupName instanceof HTMLElement) groupName.focus();
 }
 
 function syncNav(activeName) {
@@ -409,11 +450,61 @@ function showScreen(name) {
   setLiveStatus(`${name} geopend`);
 
   if (name === "camera") startVision();
+  if (name === "billing") checkStripeHealth({ silent: true });
 
   if (screen instanceof HTMLElement) screen.focus();
 
   const frame = document.querySelector(".device-frame");
   if (frame) frame.classList.toggle("onboarding", name === "onboard");
+}
+
+async function checkStripeHealth({ silent = false } = {}) {
+  if (!state.apiBase) {
+    setStripeStatus("bad", "Offline");
+    if (!silent) {
+      showSheet({
+        label: "Stripe",
+        title: "Geen API base ingesteld",
+        message: "Zet in onboarding een backend URL om `/api/payments/health` te checken.",
+      });
+    }
+    return;
+  }
+
+  setStripeStatus("neutral", "Test...");
+  try {
+    const payload = await api.get("/api/payments/health");
+    const ready = Boolean(payload?.stripe_ready);
+    const liveDetected = Boolean(payload?.live_key_detected);
+    const liveAllowed = Boolean(payload?.live_key_allowed);
+
+    if (ready) {
+      setStripeStatus("ok", "Stripe OK");
+    } else if (liveDetected && !liveAllowed) {
+      setStripeStatus("bad", "Live blocked");
+    } else {
+      setStripeStatus("neutral", "Demo");
+    }
+
+    if (!silent) {
+      showSheet({
+        label: "Stripe",
+        title: ready ? "Stripe is ready" : "Stripe demo mode",
+        message: ready
+          ? `API version ${payload?.api_version || "?"}. Mode ${payload?.stripe_mode || "?"}.`
+          : "Stripe keys ontbreken, deps ontbreken, of live key is geblokkeerd. UI blijft payment-safe.",
+      });
+    }
+  } catch {
+    setStripeStatus("bad", "Error");
+    if (!silent) {
+      showSheet({
+        label: "Stripe",
+        title: "Check mislukt",
+        message: "Backend niet bereikbaar of endpoint faalde. UI blijft in demo mode.",
+      });
+    }
+  }
 }
 
 function remainingChecks() {
@@ -580,6 +671,7 @@ function hydrateFromStorage() {
 
   if (stored?.user) state.user = { ...state.user, ...stored.user };
   state.groups = normalizeStoredGroups(stored?.groups);
+  if (stored?.onboardingGroupMode) state.onboardingGroupMode = stored.onboardingGroupMode;
   if (stored?.group) {
     const legacyGroup = normalizeBackendGroup(stored.group) || stored.group;
     if (legacyGroup?.id) state.groups[legacyGroup.id] = { ...legacyGroup };
@@ -614,6 +706,7 @@ function persistCoreState() {
     paymentSetup: state.paymentSetup,
     feeDestination: state.feeDestination,
     apiBase: state.apiBase,
+    onboardingGroupMode: state.onboardingGroupMode,
     onboardingComplete: true,
   });
 }
@@ -1349,6 +1442,7 @@ document.querySelector("#billing-help").addEventListener("click", () => {
       "Cashprijzen kunnen gambling/payment review triggeren. Daarom start de beta met abonnement, platform fee en transparante ledger zonder cash-out.",
   });
 });
+document.querySelector("#billing-check-stripe")?.addEventListener("click", () => checkStripeHealth());
 document.querySelector("#setup-payment").addEventListener("click", setupPaymentPermission);
 document.querySelector("#simulate-miss-fee").addEventListener("click", simulateMissFee);
 document.querySelector("#charge-miss-fee")?.addEventListener("click", chargeMissFeeBackend);
@@ -1458,6 +1552,67 @@ document.querySelector("#test-api")?.addEventListener("click", () => {
   testApiConnection(base);
 });
 
+document.querySelector("#onboard-group-mode-create")?.addEventListener("change", (event) => {
+  if (event.target.checked) setOnboardingGroupMode("create");
+});
+document.querySelector("#onboard-group-mode-join")?.addEventListener("change", (event) => {
+  if (event.target.checked) setOnboardingGroupMode("join");
+});
+
+async function previewJoinGroup() {
+  const apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+  const codeField = document.querySelector("#onboard-group-code");
+  const groupCode = codeField?.value?.trim() || "";
+
+  if (!groupCode) {
+    showSheet({
+      label: "Join",
+      title: "Vul een group code in",
+      message: "De code ziet eruit als `group_...` en komt uit de group owner setup.",
+    });
+    if (codeField instanceof HTMLElement) codeField.focus();
+    return;
+  }
+
+  if (!apiBase) {
+    showSheet({
+      label: "Join",
+      title: "Backend API is nodig",
+      message: "Zet een API base (bijv. http://localhost:8001) om `/api/groups/{id}` op te halen.",
+    });
+    return;
+  }
+
+  state.apiBase = apiBase;
+  localStorage.setItem(API_BASE_KEY, apiBase);
+
+  try {
+    const payload = await api.get(`/api/groups/${encodeURIComponent(groupCode)}`);
+    const group = normalizeBackendGroup(payload?.group);
+    if (!group) throw new Error("group_invalid");
+
+    showSheet({
+      label: "Join",
+      title: "Group gevonden",
+      message: `${group.name} · Deadline ${group.deadline} · Fee ${group.feeLabel}`,
+      primary: "Gebruik deze group",
+      onPrimary: () => {
+        setOnboardingGroupMode("join", { focus: false });
+        const code = document.querySelector("#onboard-group-code");
+        if (code) code.value = group.id;
+      },
+    });
+  } catch {
+    showSheet({
+      label: "Join",
+      title: "Group niet gevonden",
+      message: "Controleer de code, of je backend draait en CORS toelaat.",
+    });
+  }
+}
+
+document.querySelector("#onboard-preview-group")?.addEventListener("click", previewJoinGroup);
+
 document.querySelector("#skip-onboarding")?.addEventListener("click", () => {
   if (state.onboardingMode === "edit") {
     resetToDemo();
@@ -1473,7 +1628,9 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
   event.preventDefault();
   const name = document.querySelector("#onboard-name")?.value?.trim() || "Jij";
   const email = document.querySelector("#onboard-email")?.value?.trim() || "";
+  const mode = document.querySelector('input[name="onboardGroupMode"]:checked')?.value || "create";
   const groupName = document.querySelector("#onboard-group-name")?.value?.trim() || "Nieuwe groep";
+  const groupCode = document.querySelector("#onboard-group-code")?.value?.trim() || "";
   const deadline = document.querySelector("#onboard-deadline")?.value || "22:00";
   const feeLabel = document.querySelector("#onboard-fee")?.value || "EUR 10";
   const apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
@@ -1507,6 +1664,66 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
   }
 
   ensureIds();
+
+  const finalize = () => {
+    upsertGroup(state.group);
+    persistCoreState();
+    syncGroupUI();
+    syncUserUI();
+    syncPaymentModel();
+    updateHome();
+    updateCamera();
+    showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
+  };
+
+  if (mode === "join") {
+    state.onboardingGroupMode = "join";
+
+    if (!groupCode) {
+      showSheet({
+        label: "Join",
+        title: "Vul een group code in",
+        message: "De code ziet eruit als `group_...` en komt uit de group owner setup.",
+      });
+      document.querySelector("#onboard-group-code")?.focus();
+      return;
+    }
+
+    if (!state.apiBase) {
+      showSheet({
+        label: "Join",
+        title: "Backend API is nodig",
+        message: "Zet een API base (bijv. http://localhost:8001) om de group op te halen.",
+      });
+      return;
+    }
+
+    api
+      .get(`/api/groups/${encodeURIComponent(groupCode)}`)
+      .then((payload) => {
+        const group = normalizeBackendGroup(payload?.group);
+        if (!group) throw new Error("group_invalid");
+        state.group = { ...state.group, ...group, id: group.id };
+        state.activeGroupId = group.id;
+        finalize();
+        showSheet({
+          label: "Join",
+          title: "Je zit nu in de group",
+          message: `${state.group.name} · Deadline ${state.group.deadline}.`,
+        });
+      })
+      .catch(() => {
+        showSheet({
+          label: "Join",
+          title: "Join mislukt",
+          message: "Group niet gevonden of backend gaf een error. Check code, backend en CORS.",
+        });
+      });
+    return;
+  }
+
+  state.onboardingGroupMode = "create";
+
   upsertGroup(state.group);
   persistCoreState();
   syncGroupUI();

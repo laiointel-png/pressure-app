@@ -257,6 +257,56 @@ svg {
   align-items: center;
 }
 
+.onboard-choice {
+  display: grid;
+  gap: 10px;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.onboard-choice legend {
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.choice-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 10px;
+  border-radius: 16px;
+  cursor: pointer;
+}
+
+.choice-row strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.choice-row small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.choice-row input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--orange);
+}
+
+.choice-row:has(input:checked) {
+  background: rgba(255, 90, 0, 0.08);
+}
+
 .field-hint {
   margin-top: -2px;
   color: var(--muted);

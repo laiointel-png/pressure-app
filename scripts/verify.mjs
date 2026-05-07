@@ -18,9 +18,15 @@ const required = [
   "onboard-form",
   "onboard-name",
   "onboard-group-name",
+  "onboard-group-mode",
+  "onboard-group-mode-create",
+  "onboard-group-mode-join",
+  "onboard-group-code",
   "home-group-title",
   "group-title",
   "action-sheet",
+  "billing-check-stripe",
+  "stripe-health-pill",
 ];
 const missing = required.filter((id) => !counts.has(id));
 
@@ -32,6 +38,7 @@ const iconButtons = [...html.matchAll(/<button[^>]*class="icon-button[^"]*"[^>]*
 const iconButtonsMissingLabel = iconButtons.filter((tag) => !/aria-label="[^"]+"/.test(tag));
 
 const billingConfirmOk = /id="billing-confirm"/.test(html) && /id="billing-confirm-hint"/.test(html);
+const onboardGroupLegendOk = /id="onboard-group-mode"[\s\S]*<legend>Groep<\/legend>/.test(html);
 
 if (duplicates.length) {
   console.error("FAIL: duplicate ids found:");
@@ -58,6 +65,11 @@ if (iconButtonsMissingLabel.length) {
 
 if (!billingConfirmOk) {
   console.error("FAIL: billing confirm checkbox + hint ids missing");
+  process.exitCode = 1;
+}
+
+if (!onboardGroupLegendOk) {
+  console.error("FAIL: onboarding group fieldset missing legend");
   process.exitCode = 1;
 }
 

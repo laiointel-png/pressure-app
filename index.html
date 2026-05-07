@@ -53,20 +53,38 @@
             </div>
           </section>
 
-          <form class="content-card onboard-form" id="onboard-form">
-            <label>
-              <span>Jouw naam</span>
-              <input id="onboard-name" type="text" autocomplete="name" inputmode="text" required />
-            </label>
-            <label>
-              <span>Email (optioneel)</span>
-              <input id="onboard-email" type="email" autocomplete="email" inputmode="email" />
-            </label>
-            <label>
-              <span>Groepsnaam</span>
-              <input id="onboard-group-name" type="text" autocomplete="off" required />
-            </label>
-            <div class="onboard-row">
+	          <form class="content-card onboard-form" id="onboard-form">
+	            <label>
+	              <span>Jouw naam</span>
+	              <input id="onboard-name" type="text" autocomplete="name" inputmode="text" required />
+	            </label>
+	            <label>
+	              <span>Email (optioneel)</span>
+	              <input id="onboard-email" type="email" autocomplete="email" inputmode="email" />
+	            </label>
+	            <fieldset class="onboard-choice" id="onboard-group-mode">
+	              <legend>Groep</legend>
+	              <label class="choice-row">
+	                <input id="onboard-group-mode-create" type="radio" name="onboardGroupMode" value="create" checked />
+	                <span>
+	                  <strong>Maak nieuwe groep</strong>
+	                  <small>Vul regels in en deel invite link</small>
+	                </span>
+	              </label>
+	              <label class="choice-row">
+	                <input id="onboard-group-mode-join" type="radio" name="onboardGroupMode" value="join" />
+	                <span>
+	                  <strong>Join bestaande groep</strong>
+	                  <small>Gebruik group code (via backend)</small>
+	                </span>
+	              </label>
+	            </fieldset>
+	            <div id="onboard-create-fields">
+	            <label>
+	              <span>Groepsnaam</span>
+	              <input id="onboard-group-name" type="text" autocomplete="off" required />
+	            </label>
+	            <div class="onboard-row">
               <label>
                 <span>Deadline</span>
                 <select id="onboard-deadline" required>
@@ -81,13 +99,29 @@
                   <option>EUR 10</option>
                   <option>EUR 5</option>
                   <option>EUR 20</option>
-                </select>
-              </label>
-            </div>
-            <label>
-              <span>Backend API (optioneel)</span>
-              <input
-                id="onboard-api-base"
+	                </select>
+	              </label>
+	            </div>
+	            </div>
+	            <div id="onboard-join-fields" class="hidden" aria-live="polite">
+	              <label>
+	                <span>Group code</span>
+	                <input
+	                  id="onboard-group-code"
+	                  type="text"
+	                  autocomplete="off"
+	                  inputmode="text"
+	                  placeholder="group_..."
+	                  aria-describedby="onboard-group-code-hint"
+	                />
+	                <small class="field-hint" id="onboard-group-code-hint">Vul de code in die je via de group owner krijgt. Backend API is vereist.</small>
+	              </label>
+	              <button class="secondary-button full-width" id="onboard-preview-group" type="button">Check group</button>
+	            </div>
+	            <label>
+	              <span>Backend API (optioneel)</span>
+	              <input
+	                id="onboard-api-base"
                 type="url"
                 inputmode="url"
                 autocomplete="off"
@@ -100,10 +134,10 @@
               <button class="secondary-button full-width" id="test-api" type="button">Test API</button>
               <span class="small-pill" id="api-status-pill" aria-label="API status">Offline</span>
             </div>
-            <button class="primary-button full-width" id="onboard-submit" type="submit">Start Pressure</button>
-            <button class="text-button full-width" id="skip-onboarding" type="button">Gebruik demo data</button>
-          </form>
-        </section>
+	            <button class="primary-button full-width" id="onboard-submit" type="submit">Start Pressure</button>
+	            <button class="text-button full-width" id="skip-onboarding" type="button">Gebruik demo data</button>
+	          </form>
+	        </section>
 
         <section class="screen active" id="screen-home" aria-labelledby="home-title" tabindex="-1">
           <header class="app-header">
@@ -641,18 +675,23 @@
             </div>
           </section>
 
-          <section class="content-card" aria-labelledby="payment-setup-title">
-            <div class="section-title row">
-              <div>
-                <span class="section-label">Stripe setup</span>
-                <h2 id="payment-setup-title">3 stappen tot echte betaling</h2>
-              </div>
-              <span class="small-pill" id="payment-status-pill">Demo</span>
-            </div>
-            <div class="setup-list">
-              <article class="setup-row done">
-                <span class="step-badge">01</span>
-                <div>
+	          <section class="content-card" aria-labelledby="payment-setup-title">
+	            <div class="section-title row">
+	              <div>
+	                <span class="section-label">Stripe setup</span>
+	                <h2 id="payment-setup-title">3 stappen tot echte betaling</h2>
+	              </div>
+	              <span class="small-pill" id="payment-status-pill">Demo</span>
+	            </div>
+	            <div class="onboard-row tight">
+	              <button class="secondary-button full-width" id="billing-check-stripe" type="button">Check Stripe</button>
+	              <span class="small-pill neutral" id="stripe-health-pill" aria-label="Stripe status">Ongetest</span>
+	            </div>
+	            <small class="field-hint" id="stripe-health-hint">Zet een backend API base in onboarding. Live keys zijn geblokkeerd tenzij je allow-live flags zet.</small>
+	            <div class="setup-list">
+	              <article class="setup-row done">
+	                <span class="step-badge">01</span>
+	                <div>
                   <strong>Pressure Pass</strong>
                   <small>Stripe Billing abonnement voor app-toegang.</small>
                 </div>
