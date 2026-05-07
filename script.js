@@ -1039,6 +1039,7 @@ function setupPaymentPermission() {
 }
 
 async function setupPaymentPermissionLive() {
+  const confirm = document.querySelector("#billing-confirm");
   const email = state.user.email || document.querySelector("#onboard-email")?.value?.trim() || "";
   const userId = state.user.id;
 
@@ -1050,6 +1051,19 @@ async function setupPaymentPermissionLive() {
       label: "Demo",
       title: "Betaaltoestemming staat aan",
       message: "Geen backend ingesteld. In productie loopt dit via Stripe Checkout/SetupIntent + webhook bij miss.",
+    });
+    return;
+  }
+
+  if (confirm && !confirm.checked) {
+    showSheet({
+      label: "Bevestig",
+      title: "Bevestig checkout",
+      message: "Vink eerst aan dat je begrijpt dat er een Stripe (test) checkout in een nieuw tabblad kan openen.",
+      primary: "Ok",
+      onPrimary: () => {
+        if (confirm instanceof HTMLElement) confirm.focus();
+      },
     });
     return;
   }

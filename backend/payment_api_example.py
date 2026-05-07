@@ -31,6 +31,8 @@ except ImportError:  # pragma: no cover - local dependency is optional for the p
 
 STRIPE_API_VERSION = "2026-02-25.clover"
 APP_URL = os.getenv("PRESSURE_APP_URL", "http://localhost:5173")
+STRIPE_MODE = os.getenv("PRESSURE_STRIPE_MODE", "test_only").strip().lower()
+ALLOW_LIVE = os.getenv("PRESSURE_STRIPE_ALLOW_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 app = FastAPI(title="Pressure Payment API")
 app.add_middleware(
@@ -65,26 +67,46 @@ def stripe_client_ready() -> bool:
         return False
     stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
     stripe.api_version = STRIPE_API_VERSION
-    return bool(stripe.api_key)
+    if not stripe.api_key:
+        return False
+
+    is_live_key = stripe.api_key.startswith("sk_live_")
+    if is_live_key and not ALLOW_LIVE:
+        # Safety guard: refuse to treat live keys as ready unless explicitly allowed.
+        return False
+
+    if STRIPE_MODE not in {"test_only", "live_allowed"}:
+        # Unknown mode => fail closed.
+        return False
+
+    if STRIPE_MODE == "test_only" and is_live_key:
+        return False
+
+    return True
 
 
 def demo_response(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "mode": "demo",
         "kind": kind,
-        "message": "Set STRIPE_SECRET_KEY and install stripe to create real Stripe objects.",
+        "message": "Stripe is not enabled (missing deps/keys or live key blocked). Set STRIPE_SECRET_KEY (sk_test_...) and install stripe.",
         **payload,
     }
 
 
 @app.get("/api/payments/health")
 def health() -> dict[str, Any]:
+    key = os.getenv("STRIPE_SECRET_KEY", "")
+    is_live_key = key.startswith("sk_live_")
     return {
         "ok": True,
         "stripe_ready": stripe_client_ready(),
         "api_version": STRIPE_API_VERSION,
         "model": "subscription_plus_platform_miss_fee",
         "cash_payouts_enabled": False,
+        "stripe_mode": STRIPE_MODE,
+        "live_key_detected": is_live_key,
+        "live_key_allowed": bool(ALLOW_LIVE),
     }
 
 

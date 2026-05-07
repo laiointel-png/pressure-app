@@ -28,6 +28,11 @@ const actionSheetOk =
   /id="action-sheet"[^>]*role="dialog"/.test(html) &&
   /id="action-sheet"[^>]*aria-modal="true"/.test(html);
 
+const iconButtons = [...html.matchAll(/<button[^>]*class="icon-button[^"]*"[^>]*>/g)].map((match) => match[0]);
+const iconButtonsMissingLabel = iconButtons.filter((tag) => !/aria-label="[^"]+"/.test(tag));
+
+const billingConfirmOk = /id="billing-confirm"/.test(html) && /id="billing-confirm-hint"/.test(html);
+
 if (duplicates.length) {
   console.error("FAIL: duplicate ids found:");
   for (const [id, count] of duplicates) console.error(`- ${id} (${count}x)`);
@@ -45,7 +50,17 @@ if (!actionSheetOk) {
   process.exitCode = 1;
 }
 
+if (iconButtonsMissingLabel.length) {
+  console.error("FAIL: icon-button missing aria-label:");
+  for (const tag of iconButtonsMissingLabel) console.error(`- ${tag}`);
+  process.exitCode = 1;
+}
+
+if (!billingConfirmOk) {
+  console.error("FAIL: billing confirm checkbox + hint ids missing");
+  process.exitCode = 1;
+}
+
 if (!process.exitCode) {
   console.log("OK: basic DOM + a11y structure checks passed");
 }
-

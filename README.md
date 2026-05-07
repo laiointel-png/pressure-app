@@ -69,6 +69,12 @@ For wiring the frontend to real endpoints (Stripe demo/real + group persistence)
 .venv/bin/python -m uvicorn backend.app:app --port 8001
 ```
 
+Stripe safety defaults:
+
+- Live keys (`sk_live_...`) are treated as **disabled** by default (fail-closed).
+- To allow live keys intentionally, set `PRESSURE_STRIPE_ALLOW_LIVE=1` and `PRESSURE_STRIPE_MODE=live_allowed`.
+- For test-only usage (recommended), use `sk_test_...` and keep defaults.
+
 Then set the frontend API base in onboarding (or manually):
 
 ```js
