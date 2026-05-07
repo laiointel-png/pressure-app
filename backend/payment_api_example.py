@@ -50,6 +50,7 @@ app.add_middleware(
 class CheckoutRequest(BaseModel):
     user_id: str
     email: str
+    group_id: str = ""
 
 
 class SetupRequest(BaseModel):
@@ -128,7 +129,11 @@ def create_pass_checkout(payload: CheckoutRequest) -> dict[str, Any]:
         line_items=[{"price": price_id, "quantity": 1}],
         success_url=f"{APP_URL}/#billing",
         cancel_url=f"{APP_URL}/#profile",
-        metadata={"pressure_user_id": payload.user_id, "product": "pressure_pass"},
+        metadata={
+            "pressure_user_id": payload.user_id,
+            "pressure_group_id": payload.group_id or "",
+            "product": "pressure_pass",
+        },
     )
     return {"mode": "stripe", "checkout_url": session.url, "session_id": session.id}
 

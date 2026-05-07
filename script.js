@@ -45,6 +45,8 @@ const state = {
   onboardingReturnTo: "home",
   onboardingGroupMode: "create",
   sheetSecondaryAction: null,
+  lastBackendSyncAt: 0,
+  lastBackendGroupSaveAt: 0,
 };
 
 const STORAGE_KEY = "pressure.mvp.v1";
@@ -220,6 +222,38 @@ function setStripeStatus(kind, label) {
   pill.classList.remove("ok", "bad", "neutral");
   pill.classList.add(kind);
   pill.textContent = label;
+}
+
+function setGroupSyncStatus(kind, label) {
+  const pill = document.querySelector("#group-sync-pill");
+  if (!pill) return;
+  pill.classList.remove("ok", "bad", "neutral");
+  pill.classList.add(kind);
+  pill.textContent = label;
+}
+
+function formatShortTime(value) {
+  const timestamp = Number(value || 0);
+  if (!timestamp) return "";
+  try {
+    return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+function syncGroupSyncPill() {
+  if (!state.apiBase) {
+    setGroupSyncStatus("neutral", "Local");
+    return;
+  }
+  const last = Math.max(state.lastBackendSyncAt || 0, state.lastBackendGroupSaveAt || 0);
+  if (last) {
+    const label = state.lastBackendSyncAt >= state.lastBackendGroupSaveAt ? "Synced" : "Saved";
+    setGroupSyncStatus("ok", `${label} ${formatShortTime(last)}`);
+    return;
+  }
+  setGroupSyncStatus("neutral", "Ongetest");
 }
 
 async function testApiConnection(rawBase) {
@@ -488,6 +522,8 @@ function showScreen(name) {
 
   if (name === "camera") startVision();
   if (name === "billing") checkStripeHealth({ silent: true });
+  if (name === "create") syncCreateScreenUI();
+  if (name === "group") syncGroupSyncPill();
 
   if (screen instanceof HTMLElement) screen.focus();
 
@@ -724,6 +760,8 @@ function hydrateFromStorage() {
 
   if (stored?.paymentSetup != null) state.paymentSetup = Boolean(stored.paymentSetup);
   if (stored?.feeDestination) state.feeDestination = stored.feeDestination;
+  if (stored?.lastBackendSyncAt) state.lastBackendSyncAt = Number(stored.lastBackendSyncAt) || 0;
+  if (stored?.lastBackendGroupSaveAt) state.lastBackendGroupSaveAt = Number(stored.lastBackendGroupSaveAt) || 0;
 
   state.user.initial = state.user.initial || initialFromName(state.user.name);
 
@@ -732,6 +770,7 @@ function hydrateFromStorage() {
 
   ensureIds();
   upsertGroup(state.group);
+  syncGroupSyncPill();
 }
 
 function persistCoreState() {
@@ -744,8 +783,24 @@ function persistCoreState() {
     feeDestination: state.feeDestination,
     apiBase: state.apiBase,
     onboardingGroupMode: state.onboardingGroupMode,
+    lastBackendSyncAt: state.lastBackendSyncAt,
+    lastBackendGroupSaveAt: state.lastBackendGroupSaveAt,
     onboardingComplete: true,
   });
+}
+
+function syncCreateScreenUI() {
+  const createNewToggle = document.querySelector("#create-new-toggle");
+  const title = document.querySelector("#create-title");
+  const label = document.querySelector("#screen-create .create-hero .section-label");
+  const headline = document.querySelector("#screen-create .create-hero h1");
+  const submit = document.querySelector('#create-group-form button[type="submit"]');
+  const creatingNew = Boolean(createNewToggle?.checked);
+
+  if (title) title.textContent = creatingNew ? "Groep maken" : "Groep bewerken";
+  if (label) label.textContent = creatingNew ? "Nieuwe groep" : "Bewerk groep";
+  if (headline) headline.textContent = creatingNew ? "Maak de regels eerst duidelijk." : "Update de regels voor je groep.";
+  if (submit) submit.textContent = creatingNew ? "Maak groep live" : "Sla wijzigingen op";
 }
 
 function updateCamera() {
@@ -1208,6 +1263,7 @@ async function setupPaymentPermissionLive() {
     const checkout = await api.post("/api/payments/pass-checkout", {
       user_id: userId,
       email: email || "demo@example.com",
+      group_id: state.group.id,
     });
 
     state.paymentSetup = true;
@@ -1303,6 +1359,34 @@ async function chargeMissFeeBackend() {
   }
 }
 
+async function saveGroupToBackend(group, { silent = true } = {}) {
+  if (!state.apiBase) return false;
+  const normalized = group?.id ? group : null;
+  if (!normalized) return false;
+  try {
+    await api.post("/api/groups", {
+      group_id: normalized.id,
+      name: normalized.name,
+      deadline: normalized.deadline,
+      fee_label: normalized.feeLabel,
+      destination_label: normalized.destinationLabel,
+    });
+    state.lastBackendGroupSaveAt = Date.now();
+    persistCoreState();
+    syncGroupSyncPill();
+    return true;
+  } catch {
+    if (!silent) {
+      showSheet({
+        label: "Backend",
+        title: "Group save failed",
+        message: "Backend endpoint is niet bereikbaar of gaf een error. Local storage blijft leidend.",
+      });
+    }
+    return false;
+  }
+}
+
 async function syncGroupsFromBackend({ silent = false } = {}) {
   if (!state.apiBase) {
     if (silent) return;
@@ -1328,8 +1412,10 @@ async function syncGroupsFromBackend({ silent = false } = {}) {
       state.group = { ...state.group, ...state.groups[state.activeGroupId], id: state.activeGroupId };
     }
 
+    state.lastBackendSyncAt = Date.now();
     persistCoreState();
     syncGroupUI();
+    syncGroupSyncPill();
     updateInvitePreview();
     updateHome();
     updateCamera();
@@ -1342,6 +1428,7 @@ async function syncGroupsFromBackend({ silent = false } = {}) {
       });
     }
   } catch {
+    setGroupSyncStatus("bad", "Error");
     if (!silent) {
       showSheet({
         label: "Sync",
@@ -1395,7 +1482,13 @@ document.querySelector("#menu-button").addEventListener("click", () => {
     title: "Maak of beheer je groep",
     message: "De beta heeft nu werkende schermen voor vandaag, groep, check, rank, profiel en betaalmodel.",
     primary: "Maak groep",
-    onPrimary: () => showScreen("create"),
+    onPrimary: () => {
+      const toggle = document.querySelector("#create-new-toggle");
+      if (toggle) toggle.checked = true;
+      syncCreateScreenUI();
+      showScreen("create");
+      document.querySelector("#group-name-input")?.focus();
+    },
   });
 });
 
@@ -1496,7 +1589,7 @@ document.querySelector("#create-help").addEventListener("click", () => {
     message: "Voor de beta: 3-10 leden, 4 live checks, deadline, fee bestemming. Meer opties komen later.",
   });
 });
-document.querySelector("#create-group-form").addEventListener("submit", (event) => {
+document.querySelector("#create-group-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const name = document.querySelector("#group-name-input").value.trim() || "Nieuwe groep";
   const deadline = document.querySelector("#deadline-input")?.value || "22:00";
@@ -1521,34 +1614,45 @@ document.querySelector("#create-group-form").addEventListener("submit", (event) 
   persistCoreState();
 
   if (state.apiBase) {
-    api
-      .post("/api/groups", {
-        group_id: state.group.id,
-        name,
-        deadline,
-        fee_label: feeLabel,
-        destination_label: destinationLabel,
-      })
-      .catch(() => {
-        // backend optional; local storage already updated
-      });
+    await saveGroupToBackend(state.group, { silent: true });
   }
+  syncGroupSyncPill();
 
   showSheet({
     label: "Groep live",
-    title: `${name} is aangemaakt`,
-    message: "Invite link, regels en betaalmodel staan klaar voor de beta.",
+    title: `${name} is ${createNew ? "aangemaakt" : "opgeslagen"}`,
+    message: state.apiBase
+      ? "Invite link, regels en betaalmodel staan klaar. Backend save is best-effort."
+      : "Invite link, regels en betaalmodel staan klaar. Koppel later een backend voor sync.",
     primary: "Open groep",
     onPrimary: () => showScreen("group"),
   });
 });
 
-document.querySelector("#group-selector-new")?.addEventListener("click", () => showScreen("create"));
+document.querySelector("#group-selector-new")?.addEventListener("click", () => {
+  const toggle = document.querySelector("#create-new-toggle");
+  if (toggle) toggle.checked = true;
+  syncCreateScreenUI();
+  showScreen("create");
+  document.querySelector("#group-name-input")?.focus();
+});
+document.querySelector("#group-edit-current")?.addEventListener("click", () => {
+  const toggle = document.querySelector("#create-new-toggle");
+  if (toggle) toggle.checked = false;
+  syncCreateScreenUI();
+  showScreen("create");
+  document.querySelector("#group-name-input")?.focus();
+});
 document.querySelector("#group-sync")?.addEventListener("click", syncGroupsFromBackend);
 
 document.querySelectorAll("#group-name-input, #deadline-input, #fee-input, #destination-input").forEach((field) => {
   field.addEventListener("input", updateInvitePreview);
   field.addEventListener("change", updateInvitePreview);
+});
+
+document.querySelector("#create-new-toggle")?.addEventListener("change", () => {
+  syncCreateScreenUI();
+  updateInvitePreview();
 });
 
 document.querySelector("#pause-trace").addEventListener("click", () => {
@@ -1708,6 +1812,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
     syncGroupUI();
     syncUserUI();
     syncPaymentModel();
+    if (state.onboardingGroupMode === "create") saveGroupToBackend(state.group, { silent: true });
     updateHome();
     updateCamera();
     showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
@@ -1766,19 +1871,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
   syncGroupUI();
   syncUserUI();
   syncPaymentModel();
-  if (state.apiBase) {
-    api
-      .post("/api/groups", {
-        group_id: state.group.id,
-        name: state.group.name,
-        deadline: state.group.deadline,
-        fee_label: state.group.feeLabel,
-        destination_label: state.group.destinationLabel,
-      })
-      .catch(() => {
-        // backend optional; local storage already updated
-      });
-  }
+  saveGroupToBackend(state.group, { silent: true });
   updateHome();
   updateCamera();
   showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
