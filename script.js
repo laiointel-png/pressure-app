@@ -39,6 +39,9 @@ const state = {
   sheetLastFocus: null,
   paymentSetup: false,
   feeDestination: "platform",
+  onboardingMode: "setup",
+  onboardingReturnTo: "home",
+  sheetSecondaryAction: null,
 };
 
 const STORAGE_KEY = "pressure.mvp.v1";
@@ -106,6 +109,69 @@ const api = {
   },
 };
 
+function setApiStatus(kind, label) {
+  const pill = document.querySelector("#api-status-pill");
+  if (!pill) return;
+  pill.classList.remove("ok", "bad", "neutral");
+  pill.classList.add(kind);
+  pill.textContent = label;
+}
+
+async function testApiConnection(rawBase) {
+  const base = normalizeApiBase(rawBase);
+  if (!base) {
+    setApiStatus("bad", "Offline");
+    showSheet({
+      label: "API",
+      title: "Geen API base ingevuld",
+      message: "Zet een URL zoals http://localhost:8001 in om group sync + Stripe demo endpoints te testen.",
+    });
+    return;
+  }
+
+  setApiStatus("neutral", "Test...");
+  try {
+    const healthResponse = await fetch(`${base}/api/health`, { method: "GET" });
+    if (!healthResponse.ok) throw new Error(`health:${healthResponse.status}`);
+    const health = await healthResponse.json();
+
+    let payments = null;
+    try {
+      const paymentsResponse = await fetch(`${base}/api/payments/health`, { method: "GET" });
+      if (paymentsResponse.ok) payments = await paymentsResponse.json();
+    } catch {
+      payments = null;
+    }
+
+    const groupsReady = Boolean(health?.features?.groups);
+    const paymentsReady = Boolean(health?.features?.payments);
+    const stripeReady = Boolean(payments?.stripe_ready);
+
+    if (groupsReady && paymentsReady) {
+      setApiStatus("ok", stripeReady ? "Stripe OK" : "API OK");
+    } else if (groupsReady) {
+      setApiStatus("neutral", "Groups OK");
+    } else {
+      setApiStatus("bad", "Partial");
+    }
+
+    showSheet({
+      label: "API check",
+      title: "Backend bereikbaar",
+      message: `Groups: ${groupsReady ? "ok" : "uit"}. Payments: ${paymentsReady ? "ok" : "uit"}. Stripe: ${
+        stripeReady ? "ready" : "demo"
+      }.`,
+    });
+  } catch {
+    setApiStatus("bad", "Offline");
+    showSheet({
+      label: "API",
+      title: "Backend niet bereikbaar",
+      message: "Check of de server draait en CORS toestaat. UI blijft werken met localStorage demo state.",
+    });
+  }
+}
+
 const localVisionEndpoint = ["localhost", "127.0.0.1"].includes(window.location.hostname)
   ? "http://localhost:8000/api/rfdetr/detect"
   : "";
@@ -166,12 +232,21 @@ function setText(selector, text) {
   if (element) element.textContent = text;
 }
 
-function showSheet({ label = "Update", title, message, primary = "Ok", secondary = "Sluiten", onPrimary = null }) {
+function showSheet({
+  label = "Update",
+  title,
+  message,
+  primary = "Ok",
+  secondary = "Sluiten",
+  onPrimary = null,
+  onSecondary = null,
+}) {
   const sheet = document.querySelector("#action-sheet");
   if (!sheet) return;
 
   state.sheetLastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   state.sheetAction = onPrimary;
+  state.sheetSecondaryAction = onSecondary;
   setText("#sheet-label", label);
   setText("#sheet-title", title);
   setText("#sheet-message", message);
@@ -191,8 +266,57 @@ function closeSheet() {
   sheet.classList.remove("open");
   sheet.setAttribute("aria-hidden", "true");
   state.sheetAction = null;
+  state.sheetSecondaryAction = null;
   if (state.sheetLastFocus instanceof HTMLElement) state.sheetLastFocus.focus();
   state.sheetLastFocus = null;
+}
+
+function resetToDemo() {
+  state.user = { ...state.user, name: "Jij", email: "", initial: "Y" };
+  state.group = { ...state.group, name: "Team Iron Pact", deadline: "22:00", feeLabel: "EUR 10" };
+  state.apiBase = "";
+  localStorage.removeItem(API_BASE_KEY);
+  state.paymentSetup = false;
+  state.feeDestination = "platform";
+  state.onboardingMode = "setup";
+  state.onboardingReturnTo = "home";
+  persistCoreState();
+  syncGroupUI();
+  syncUserUI();
+  syncPaymentModel();
+  updateHome();
+  updateCamera();
+}
+
+function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
+  state.onboardingMode = mode;
+  state.onboardingReturnTo = returnTo;
+
+  const backButton = document.querySelector("#onboard-back");
+  if (backButton) backButton.classList.toggle("hidden", mode !== "edit");
+
+  const submit = document.querySelector("#onboard-submit");
+  if (submit) submit.textContent = mode === "edit" ? "Update setup" : "Start Pressure";
+
+  const skip = document.querySelector("#skip-onboarding");
+  if (skip) skip.textContent = mode === "edit" ? "Reset naar demo" : "Gebruik demo data";
+
+  const nameField = document.querySelector("#onboard-name");
+  const emailField = document.querySelector("#onboard-email");
+  const groupField = document.querySelector("#onboard-group-name");
+  const deadlineField = document.querySelector("#onboard-deadline");
+  const feeField = document.querySelector("#onboard-fee");
+  const apiBaseField = document.querySelector("#onboard-api-base");
+
+  if (nameField) nameField.value = state.user.name || "";
+  if (emailField) emailField.value = state.user.email || "";
+  if (groupField) groupField.value = state.group.name || "";
+  if (deadlineField) deadlineField.value = state.group.deadline || "22:00";
+  if (feeField) feeField.value = state.group.feeLabel || "EUR 10";
+  if (apiBaseField) apiBaseField.value = state.apiBase || "";
+
+  setApiStatus(state.apiBase ? "neutral" : "bad", state.apiBase ? "Ongetest" : "Offline");
+  showScreen("onboard");
 }
 
 function syncNav(activeName) {
@@ -974,8 +1098,15 @@ document.querySelector("#rank-info").addEventListener("click", () => {
 document.querySelector("#settings-button").addEventListener("click", () => {
   showSheet({
     label: "Instellingen",
-    title: "Demo instellingen",
-    message: "Hier komen fee bedrag, check-in tijden, betaalmethode en privacy instellingen.",
+    title: "Beheer je setup",
+    message: "Wijzig je naam, groep, backend API en betaalmodel. Reset kan altijd terug naar demo.",
+    primary: "Wijzig setup",
+    secondary: "Reset demo",
+    onPrimary: () => enterOnboarding({ mode: "edit", returnTo: "profile" }),
+    onSecondary: () => {
+      resetToDemo();
+      showScreen("home");
+    },
   });
 });
 
@@ -1068,7 +1199,11 @@ document.querySelector("#sheet-primary").addEventListener("click", () => {
   closeSheet();
   if (action) action();
 });
-document.querySelector("#sheet-secondary").addEventListener("click", closeSheet);
+document.querySelector("#sheet-secondary").addEventListener("click", () => {
+  const action = state.sheetSecondaryAction;
+  closeSheet();
+  if (action) action();
+});
 document.querySelector("#action-sheet").addEventListener("click", (event) => {
   if (event.target.id === "action-sheet") closeSheet();
 });
@@ -1077,17 +1212,23 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeSheet();
 });
 
+document.querySelector("#onboard-back")?.addEventListener("click", () => {
+  showScreen(state.onboardingReturnTo || "home");
+});
+
+document.querySelector("#test-api")?.addEventListener("click", () => {
+  const base = document.querySelector("#onboard-api-base")?.value || "";
+  testApiConnection(base);
+});
+
 document.querySelector("#skip-onboarding")?.addEventListener("click", () => {
-  state.user = { ...state.user, name: "Jij", email: "", initial: "Y" };
-  state.group = { ...state.group, name: "Team Iron Pact" };
-  state.apiBase = "";
-  localStorage.removeItem(API_BASE_KEY);
-  persistCoreState();
-  syncGroupUI();
-  syncUserUI();
-  syncPaymentModel();
-  updateHome();
-  updateCamera();
+  if (state.onboardingMode === "edit") {
+    resetToDemo();
+    showScreen("home");
+    return;
+  }
+
+  resetToDemo();
   showScreen("home");
 });
 
@@ -1141,7 +1282,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
   }
   updateHome();
   updateCamera();
-  showScreen("home");
+  showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
 });
 
 document.querySelectorAll("[data-screen-target]").forEach((button) => {
@@ -1172,13 +1313,7 @@ updateCamera();
 const stored = loadModel();
 const initialScreen = location.hash.replace("#", "");
 if (!stored?.user?.name || stored?.onboardingComplete === false) {
-  const nameField = document.querySelector("#onboard-name");
-  const groupField = document.querySelector("#onboard-group-name");
-  if (nameField) nameField.value = state.user.name || "";
-  if (groupField) groupField.value = state.group.name || "";
-  const apiBaseField = document.querySelector("#onboard-api-base");
-  if (apiBaseField) apiBaseField.value = state.apiBase || "";
-  showScreen("onboard");
+  enterOnboarding({ mode: "setup", returnTo: "home" });
 } else if (screens[initialScreen]) {
   showScreen(initialScreen);
 } else {

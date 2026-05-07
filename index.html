@@ -31,7 +31,13 @@
 
         <section class="screen fullscreen" id="screen-onboard" aria-labelledby="onboard-title" tabindex="-1">
           <header class="app-header">
-            <div></div>
+            <div>
+              <button class="icon-button hidden" id="onboard-back" type="button" aria-label="Terug">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M15 18 9 12l6-6" />
+                </svg>
+              </button>
+            </div>
             <div>
               <strong>PRESSURE</strong>
               <span>Onboarding</span>
@@ -90,7 +96,11 @@
               />
               <small class="field-hint" id="onboard-api-hint">Alleen nodig voor echte Stripe/billing endpoints en group sync.</small>
             </label>
-            <button class="primary-button full-width" type="submit">Start Pressure</button>
+            <div class="onboard-row tight">
+              <button class="secondary-button full-width" id="test-api" type="button">Test API</button>
+              <span class="small-pill" id="api-status-pill" aria-label="API status">Offline</span>
+            </div>
+            <button class="primary-button full-width" id="onboard-submit" type="submit">Start Pressure</button>
             <button class="text-button full-width" id="skip-onboarding" type="button">Gebruik demo data</button>
           </form>
         </section>

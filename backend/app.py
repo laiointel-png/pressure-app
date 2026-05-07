@@ -14,6 +14,7 @@ subscription + platform miss fee + transparent ledger, no pooled pot and no cash
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -48,11 +49,14 @@ def _write_json(path: Path, payload: Any) -> None:
 
 
 app = FastAPI(title="Pressure Prototype API")
+_default_origins = ["http://localhost:5173", "http://127.0.0.1:5173", "null"]
+_extra_origins = [origin.strip() for origin in os.getenv("PRESSURE_ALLOWED_ORIGINS", "").split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "null"],
+    allow_origins=[*_default_origins, *_extra_origins],
+    allow_origin_regex=r"https://.*\.github\.io$",
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 

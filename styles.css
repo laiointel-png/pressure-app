@@ -65,6 +65,10 @@ svg {
   stroke-width: 2.35;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
@@ -246,6 +250,11 @@ svg {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.onboard-row.tight {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
 }
 
 .field-hint {
@@ -464,6 +473,22 @@ svg {
   font-size: 12px;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.small-pill.ok {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.small-pill.bad {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.small-pill.neutral {
+  background: var(--soft);
+  color: var(--muted);
+  border: 1px solid var(--line);
 }
 
 .step-progress {
