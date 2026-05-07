@@ -17,6 +17,8 @@ const state = {
     email: "",
     initial: "Y",
   },
+  groups: {},
+  activeGroupId: "",
   group: {
     id: "group_demo",
     name: "Team Iron Pact",
@@ -73,6 +75,63 @@ function ensureIds() {
     (() => `${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`);
   if (!state.user.id) state.user.id = `user_${uuid()}`;
   if (!state.group.id) state.group.id = `group_${uuid()}`;
+  if (!state.activeGroupId) state.activeGroupId = state.group.id;
+}
+
+function normalizeStoredGroups(value) {
+  if (!value) return {};
+  if (Array.isArray(value)) {
+    return value.reduce((acc, group) => {
+      if (group?.id) acc[group.id] = group;
+      return acc;
+    }, {});
+  }
+  if (typeof value === "object") return { ...value };
+  return {};
+}
+
+function normalizeBackendGroup(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const id = raw.id || raw.group_id || raw.groupId;
+  if (!id) return null;
+  return {
+    id,
+    name: raw.name || "Nieuwe groep",
+    deadline: raw.deadline || "22:00",
+    feeLabel: raw.feeLabel || raw.fee_label || "EUR 10",
+    destinationLabel: raw.destinationLabel || raw.destination_label || "Platform fee, geen cash-out",
+    membersCount: Number(raw.membersCount ?? raw.members_count ?? 4) || 4,
+  };
+}
+
+function upsertGroup(group) {
+  if (!group?.id) return;
+  state.groups[group.id] = { ...(state.groups[group.id] || {}), ...group };
+}
+
+function setActiveGroup(groupId, { announce = true } = {}) {
+  const next = state.groups[groupId];
+  if (!next) return;
+  state.group = { ...state.group, ...next, id: groupId };
+  state.activeGroupId = groupId;
+  persistCoreState();
+  syncGroupUI();
+  updateInvitePreview();
+  updateHome();
+  updateCamera();
+  if (announce) {
+    showSheet({
+      label: "Groep",
+      title: `Actief: ${state.group.name}`,
+      message: `Deadline ${state.group.deadline}. Fee ${state.group.feeLabel}.`,
+    });
+  }
+}
+
+function sortedGroups() {
+  return Object.values(state.groups)
+    .filter((group) => group?.id)
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "nl"));
 }
 
 function initialFromName(name) {
@@ -274,6 +333,9 @@ function closeSheet() {
 function resetToDemo() {
   state.user = { ...state.user, name: "Jij", email: "", initial: "Y" };
   state.group = { ...state.group, name: "Team Iron Pact", deadline: "22:00", feeLabel: "EUR 10" };
+  state.groups = {};
+  state.activeGroupId = state.group.id;
+  upsertGroup(state.group);
   state.apiBase = "";
   localStorage.removeItem(API_BASE_KEY);
   state.paymentSetup = false;
@@ -464,11 +526,44 @@ function syncGroupUI() {
   if (feeInput) feeInput.value = state.group.feeLabel;
   const destinationInput = document.querySelector("#destination-input");
   if (destinationInput) destinationInput.value = state.group.destinationLabel;
+
+  renderGroupSelector();
 }
 
 function syncUserUI() {
   setText("#profile-avatar", state.user.initial || "Y");
   setText("#group-user-avatar", state.user.initial || "Y");
+}
+
+function renderGroupSelector() {
+  const container = document.querySelector("#group-selector-list");
+  if (!container) return;
+
+  const groups = sortedGroups();
+  if (!groups.length) {
+    container.replaceChildren();
+    return;
+  }
+
+  container.replaceChildren(
+    ...groups.map((group) => {
+      const button = document.createElement("button");
+      const active = group.id === state.activeGroupId;
+      button.type = "button";
+      button.className = `group-option${active ? " active" : ""}`;
+      button.dataset.groupId = group.id;
+      button.setAttribute("aria-pressed", active ? "true" : "false");
+      button.innerHTML = `
+        <span>
+          <strong>${group.name}</strong>
+          <small>Deadline ${group.deadline} · Fee ${group.feeLabel}</small>
+        </span>
+        <em>${active ? "Actief" : "Kies"}</em>
+      `;
+      button.addEventListener("click", () => setActiveGroup(group.id));
+      return button;
+    }),
+  );
 }
 
 function hydrateFromStorage() {
@@ -480,7 +575,20 @@ function hydrateFromStorage() {
     "";
 
   if (stored?.user) state.user = { ...state.user, ...stored.user };
-  if (stored?.group) state.group = { ...state.group, ...stored.group };
+  state.groups = normalizeStoredGroups(stored?.groups);
+  if (stored?.group) {
+    const legacyGroup = normalizeBackendGroup(stored.group) || stored.group;
+    if (legacyGroup?.id) state.groups[legacyGroup.id] = { ...legacyGroup };
+  }
+
+  const storedActive = stored?.activeGroupId || stored?.group?.id || "";
+  if (storedActive && state.groups[storedActive]) {
+    state.activeGroupId = storedActive;
+    state.group = { ...state.group, ...state.groups[storedActive], id: storedActive };
+  } else if (stored?.group) {
+    state.group = { ...state.group, ...stored.group };
+  }
+
   if (stored?.paymentSetup != null) state.paymentSetup = Boolean(stored.paymentSetup);
   if (stored?.feeDestination) state.feeDestination = stored.feeDestination;
 
@@ -490,15 +598,19 @@ function hydrateFromStorage() {
   if (state.apiBase) localStorage.setItem(API_BASE_KEY, state.apiBase);
 
   ensureIds();
+  upsertGroup(state.group);
 }
 
 function persistCoreState() {
   saveModel({
     user: state.user,
+    groups: state.groups,
+    activeGroupId: state.activeGroupId,
     group: state.group,
     paymentSetup: state.paymentSetup,
     feeDestination: state.feeDestination,
     apiBase: state.apiBase,
+    onboardingComplete: true,
   });
 }
 
@@ -996,6 +1108,97 @@ function simulateMissFee() {
   });
 }
 
+async function chargeMissFeeBackend() {
+  if (!state.apiBase) {
+    showSheet({
+      label: "Backend",
+      title: "Geen API base ingesteld",
+      message: "Zet in onboarding een API base om `/api/payments/miss-fee` te testen. Zonder backend blijft de ledger demo-only.",
+    });
+    return;
+  }
+
+  try {
+    const response = await api.post("/api/payments/miss-fee", {
+      stripe_customer_id: "cus_demo",
+      payment_method_id: "pm_demo",
+      user_id: state.user.id,
+      group_id: state.group.id,
+      amount_cents: 1000,
+      reason: "missed_live_checks",
+    });
+
+    const ledger = document.querySelector("#ledger-list");
+    if (ledger) {
+      const row = document.createElement("article");
+      const mode = response?.mode || "demo";
+      const status = response?.status || response?.ledger_status || "ok";
+      row.innerHTML = `
+        <span>Backend</span>
+        <strong>Miss fee charge (${mode})</strong>
+        <em>${status}</em>
+      `;
+      ledger.prepend(row);
+    }
+
+    showSheet({
+      label: "Backend",
+      title: "Miss fee endpoint aangeroepen",
+      message: `Mode: ${response?.mode || "demo"}. Status: ${response?.status || response?.ledger_status || "ok"}.`,
+    });
+  } catch {
+    showSheet({
+      label: "Backend",
+      title: "Charge failed",
+      message: "Backend endpoint is niet bereikbaar of gaf een error. UI blijft veilig in demo mode.",
+    });
+  }
+}
+
+async function syncGroupsFromBackend() {
+  if (!state.apiBase) {
+    showSheet({
+      label: "Sync",
+      title: "Geen API base ingesteld",
+      message: "Zet een backend URL in onboarding om groups te syncen met `/api/groups`.",
+    });
+    return;
+  }
+
+  try {
+    const payload = await api.get("/api/groups");
+    const groups = Array.isArray(payload?.groups) ? payload.groups : [];
+    const next = groups.map(normalizeBackendGroup).filter(Boolean);
+    next.forEach(upsertGroup);
+
+    if (!state.activeGroupId || !state.groups[state.activeGroupId]) {
+      const first = next[0]?.id;
+      if (first) state.activeGroupId = first;
+    }
+    if (state.activeGroupId && state.groups[state.activeGroupId]) {
+      state.group = { ...state.group, ...state.groups[state.activeGroupId], id: state.activeGroupId };
+    }
+
+    persistCoreState();
+    syncGroupUI();
+    updateInvitePreview();
+    updateHome();
+    updateCamera();
+
+    showSheet({
+      label: "Sync",
+      title: "Groups gesynct",
+      message: `Backend groups geladen: ${next.length}.`,
+    });
+  } catch {
+    showSheet({
+      label: "Sync",
+      title: "Sync mislukt",
+      message: "Backend niet bereikbaar of CORS blokkeert `/api/groups`. Local storage blijft leidend.",
+    });
+  }
+}
+
 function updateInvitePreview() {
   const name = document.querySelector("#group-name-input")?.value || state.group.name || "Nieuwe groep";
   const deadline = document.querySelector("#deadline-input")?.value || state.group.deadline || "22:00";
@@ -1125,6 +1328,7 @@ document.querySelector("#billing-help").addEventListener("click", () => {
 });
 document.querySelector("#setup-payment").addEventListener("click", setupPaymentPermission);
 document.querySelector("#simulate-miss-fee").addEventListener("click", simulateMissFee);
+document.querySelector("#charge-miss-fee")?.addEventListener("click", chargeMissFeeBackend);
 
 document.querySelectorAll(".model-option").forEach((button) => {
   button.addEventListener("click", () => chooseFeeDestination(button.dataset.model));
@@ -1144,6 +1348,15 @@ document.querySelector("#create-group-form").addEventListener("submit", (event) 
   const deadline = document.querySelector("#deadline-input")?.value || "22:00";
   const feeLabel = document.querySelector("#fee-input")?.value || "EUR 10";
   const destinationLabel = document.querySelector("#destination-input")?.value || "Platform fee, geen cash-out";
+  const createNew = Boolean(document.querySelector("#create-new-toggle")?.checked);
+
+  if (createNew) {
+    const uuid =
+      globalThis.crypto?.randomUUID?.bind(globalThis.crypto) ||
+      (() => `${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`);
+    state.group = { ...state.group, id: `group_${uuid()}` };
+    state.activeGroupId = state.group.id;
+  }
 
   state.group = {
     ...state.group,
@@ -1152,6 +1365,7 @@ document.querySelector("#create-group-form").addEventListener("submit", (event) 
     feeLabel,
     destinationLabel,
   };
+  upsertGroup(state.group);
   syncGroupUI();
   persistCoreState();
 
@@ -1177,6 +1391,9 @@ document.querySelector("#create-group-form").addEventListener("submit", (event) 
     onPrimary: () => showScreen("group"),
   });
 });
+
+document.querySelector("#group-selector-new")?.addEventListener("click", () => showScreen("create"));
+document.querySelector("#group-sync")?.addEventListener("click", syncGroupsFromBackend);
 
 document.querySelectorAll("#group-name-input, #deadline-input, #fee-input, #destination-input").forEach((field) => {
   field.addEventListener("input", updateInvitePreview);
@@ -1263,6 +1480,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
   }
 
   ensureIds();
+  upsertGroup(state.group);
   persistCoreState();
   syncGroupUI();
   syncUserUI();
@@ -1303,6 +1521,7 @@ window.addEventListener("hashchange", () => {
 });
 
 hydrateFromStorage();
+renderGroupSelector();
 syncGroupUI();
 syncUserUI();
 syncPaymentModel();
@@ -1312,7 +1531,7 @@ updateCamera();
 
 const stored = loadModel();
 const initialScreen = location.hash.replace("#", "");
-if (!stored?.user?.name || stored?.onboardingComplete === false) {
+if (!stored?.onboardingComplete || !stored?.user?.name) {
   enterOnboarding({ mode: "setup", returnTo: "home" });
 } else if (screens[initialScreen]) {
   showScreen(initialScreen);

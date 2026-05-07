@@ -451,6 +451,37 @@ svg {
   gap: 12px;
 }
 
+.ledger-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.checkbox-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: #fff;
+}
+
+.checkbox-row input {
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+}
+
+.checkbox-row span {
+  color: var(--black);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .section-title.compact {
   margin-bottom: 8px;
 }
@@ -785,6 +816,62 @@ svg {
 
 #screen-group .rule-card {
   margin-top: 112px;
+}
+
+.group-selector {
+  margin-top: 12px;
+}
+
+.group-selector-list {
+  display: grid;
+  gap: 10px;
+}
+
+.group-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  text-align: left;
+}
+
+.group-option strong {
+  color: var(--black);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.group-option small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.group-option em {
+  justify-self: end;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: var(--orange-soft);
+  color: var(--orange-dark);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.group-option.active {
+  border-color: rgba(255, 90, 0, 0.42);
+  background: var(--orange-soft);
 }
 
 .rule-card .secondary-button {

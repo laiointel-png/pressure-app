@@ -358,6 +358,18 @@
             <p id="group-rules-copy">Deadline 22:00. Wie niet 4/4 haalt betaalt EUR 10 als platform fee. Winnaars krijgen rank en perks, geen cash-out.</p>
             <button class="secondary-button" id="edit-rules" type="button">Bekijk regels</button>
           </section>
+
+          <section class="content-card group-selector" aria-labelledby="group-selector-title">
+            <div class="section-title row">
+              <div>
+                <span class="section-label">Jouw groepen</span>
+                <h2 id="group-selector-title">Wissel actieve groep</h2>
+              </div>
+              <button class="text-button" id="group-sync" type="button">Sync</button>
+            </div>
+            <div class="group-selector-list" id="group-selector-list" role="list"></div>
+            <button class="secondary-button full-width" id="group-selector-new" type="button">Maak nieuwe groep</button>
+          </section>
         </section>
 
         <section class="screen" id="screen-camera" aria-labelledby="camera-title" tabindex="-1">
@@ -669,7 +681,10 @@
                 <span class="section-label">Ledger demo</span>
                 <h2 id="ledger-title">Transparant voor de groep</h2>
               </div>
-              <button class="text-button" id="simulate-miss-fee" type="button">Simuleer miss</button>
+              <div class="ledger-actions">
+                <button class="text-button" id="simulate-miss-fee" type="button">Simuleer miss</button>
+                <button class="text-button" id="charge-miss-fee" type="button">Charge backend</button>
+              </div>
             </div>
             <div class="ledger-list" id="ledger-list">
               <article>
@@ -718,6 +733,10 @@
             <label>
               <span>Groepsnaam</span>
               <input id="group-name-input" type="text" value="Team Iron Pact" autocomplete="off" />
+            </label>
+            <label class="checkbox-row">
+              <input id="create-new-toggle" type="checkbox" checked />
+              <span>Maak als nieuwe groep (anders update je huidige groep)</span>
             </label>
             <label>
               <span>Deadline</span>
