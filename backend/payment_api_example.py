@@ -35,11 +35,14 @@ STRIPE_MODE = os.getenv("PRESSURE_STRIPE_MODE", "test_only").strip().lower()
 ALLOW_LIVE = os.getenv("PRESSURE_STRIPE_ALLOW_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 app = FastAPI(title="Pressure Payment API")
+_default_origins = ["http://localhost:5173", "http://127.0.0.1:5173", "null"]
+_extra_origins = [origin.strip() for origin in os.getenv("PRESSURE_ALLOWED_ORIGINS", "").split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[*_default_origins, *_extra_origins],
+    allow_origin_regex=r"https://.*\.github\.io$",
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 

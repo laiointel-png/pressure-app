@@ -70,12 +70,16 @@ function saveModel(next) {
 }
 
 function ensureIds() {
+  if (!state.user.id) state.user.id = newId("user");
+  if (!state.group.id) state.group.id = newId("group");
+  if (!state.activeGroupId) state.activeGroupId = state.group.id;
+}
+
+function newId(prefix) {
   const uuid =
     globalThis.crypto?.randomUUID?.bind(globalThis.crypto) ||
     (() => `${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`);
-  if (!state.user.id) state.user.id = `user_${uuid()}`;
-  if (!state.group.id) state.group.id = `group_${uuid()}`;
-  if (!state.activeGroupId) state.activeGroupId = state.group.id;
+  return `${prefix}_${uuid()}`;
 }
 
 function normalizeStoredGroups(value) {
@@ -1169,8 +1173,9 @@ async function chargeMissFeeBackend() {
   }
 }
 
-async function syncGroupsFromBackend() {
+async function syncGroupsFromBackend({ silent = false } = {}) {
   if (!state.apiBase) {
+    if (silent) return;
     showSheet({
       label: "Sync",
       title: "Geen API base ingesteld",
@@ -1199,17 +1204,21 @@ async function syncGroupsFromBackend() {
     updateHome();
     updateCamera();
 
-    showSheet({
-      label: "Sync",
-      title: "Groups gesynct",
-      message: `Backend groups geladen: ${next.length}.`,
-    });
+    if (!silent) {
+      showSheet({
+        label: "Sync",
+        title: "Groups gesynct",
+        message: `Backend groups geladen: ${next.length}.`,
+      });
+    }
   } catch {
-    showSheet({
-      label: "Sync",
-      title: "Sync mislukt",
-      message: "Backend niet bereikbaar of CORS blokkeert `/api/groups`. Local storage blijft leidend.",
-    });
+    if (!silent) {
+      showSheet({
+        label: "Sync",
+        title: "Sync mislukt",
+        message: "Backend niet bereikbaar of CORS blokkeert `/api/groups`. Local storage blijft leidend.",
+      });
+    }
   }
 }
 
@@ -1365,10 +1374,7 @@ document.querySelector("#create-group-form").addEventListener("submit", (event) 
   const createNew = Boolean(document.querySelector("#create-new-toggle")?.checked);
 
   if (createNew) {
-    const uuid =
-      globalThis.crypto?.randomUUID?.bind(globalThis.crypto) ||
-      (() => `${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`);
-    state.group = { ...state.group, id: `group_${uuid()}` };
+    state.group = { ...state.group, id: newId("group") };
     state.activeGroupId = state.group.id;
   }
 
@@ -1478,6 +1484,13 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
     email,
     initial: initialFromName(name),
   };
+
+  if (state.onboardingMode !== "edit") {
+    if (!state.user.id || state.user.id === "user_demo") state.user.id = newId("user");
+    if (!state.group.id || state.group.id === "group_demo") state.group.id = newId("group");
+    state.activeGroupId = state.group.id;
+  }
+
   state.group = {
     ...state.group,
     name: groupName,
@@ -1535,6 +1548,10 @@ window.addEventListener("hashchange", () => {
 });
 
 hydrateFromStorage();
+if (state.apiBase) {
+  // Best-effort merge backend groups without interrupting the demo UX.
+  syncGroupsFromBackend({ silent: true });
+}
 renderGroupSelector();
 syncGroupUI();
 syncUserUI();
