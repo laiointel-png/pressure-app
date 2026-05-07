@@ -124,6 +124,19 @@ svg {
   scrollbar-width: none;
 }
 
+.screen.fullscreen {
+  inset: 0;
+  padding-bottom: 24px;
+}
+
+.device-frame.onboarding .bottom-nav {
+  display: none;
+}
+
+.device-frame.onboarding .status-bar {
+  opacity: 0.2;
+}
+
 .screen::-webkit-scrollbar {
   display: none;
 }
@@ -201,6 +214,45 @@ svg {
   letter-spacing: 0.04em;
   line-height: 1.2;
   text-transform: uppercase;
+}
+
+.onboard-form {
+  display: grid;
+  gap: 14px;
+  padding: 18px 18px 20px;
+}
+
+.onboard-form label {
+  display: grid;
+  gap: 8px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.onboard-form input,
+.onboard-form select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.onboard-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field-hint {
+  margin-top: -2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .hero-card,

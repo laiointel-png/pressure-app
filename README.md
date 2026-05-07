@@ -8,6 +8,7 @@ Live preview: https://laiointel-png.github.io/pressure-app/
 
 - Basic-Fit-inspired orange/black/white mobile UI
 - Working Today, Group, Check, Rank, Profile, Payment Model, and Create Group screens
+- Onboarding flow with persisted user + group config (localStorage)
 - RF-DETR-ready live camera verification adapter with demo fallback
 - Payment-safe beta model: subscription + platform miss fee, no cash pot, no wallet, no winner payout
 - Group creation form, payment model choices, setup simulation, and transparent fee ledger
@@ -19,6 +20,13 @@ python3 -m http.server 5173
 ```
 
 Open `http://localhost:5173`.
+
+## Persisted onboarding + group config
+
+The prototype now persists user + group configuration in `localStorage` under `pressure.mvp.v1`.
+
+- First visit shows the onboarding screen.
+- Group creation updates the stored config and propagates to Home/Group/Create screens.
 
 ## Prototype assets
 
@@ -51,6 +59,21 @@ The beta intentionally does not use "winner gets the pot". The safer direction i
 See `docs/payment-strategy.md`.
 
 Backend sketch: `backend/payment_api_example.py` has the Stripe endpoints for Checkout subscription, saved payment method setup, miss-fee charge, and webhook handling.
+
+## Backend (optional)
+
+For wiring the frontend to real endpoints (Stripe demo/real + group persistence), run the unified API server:
+
+```bash
+.venv/bin/python -m pip install fastapi uvicorn stripe
+.venv/bin/python -m uvicorn backend.app:app --port 8001
+```
+
+Then set the frontend API base in onboarding (or manually):
+
+```js
+localStorage.setItem("pressureApiBase", "http://localhost:8001");
+```
 
 ## GitHub Pages
 

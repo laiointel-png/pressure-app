@@ -18,7 +18,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050505'/%3E%3Cpath d='M18 42 44 16' stroke='%23ff5a00' stroke-width='9' stroke-linecap='round'/%3E%3Cpath d='M20 20h20v20H20z' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="./styles.css?v=14" />
+    <link rel="stylesheet" href="./styles.css?v=15" />
   </head>
   <body>
     <main class="app-shell">
@@ -29,7 +29,73 @@
         </div>
         <p class="sr-only" id="live-status" aria-live="polite"></p>
 
-        <section class="screen active" id="screen-home" aria-labelledby="home-title">
+        <section class="screen fullscreen" id="screen-onboard" aria-labelledby="onboard-title" tabindex="-1">
+          <header class="app-header">
+            <div></div>
+            <div>
+              <strong>PRESSURE</strong>
+              <span>Onboarding</span>
+            </div>
+            <div></div>
+          </header>
+
+          <section class="hero-card onboard-hero" aria-labelledby="onboard-title">
+            <div class="hero-copy">
+              <span class="section-label">Welkom</span>
+              <h1 id="onboard-title">Zet je druk-systeem klaar</h1>
+              <p>Maak je profiel aan, kies je groep, en zet de betaalflow veilig klaar (abonnement + platform fee, geen pot).</p>
+            </div>
+          </section>
+
+          <form class="content-card onboard-form" id="onboard-form">
+            <label>
+              <span>Jouw naam</span>
+              <input id="onboard-name" type="text" autocomplete="name" inputmode="text" required />
+            </label>
+            <label>
+              <span>Email (optioneel)</span>
+              <input id="onboard-email" type="email" autocomplete="email" inputmode="email" />
+            </label>
+            <label>
+              <span>Groepsnaam</span>
+              <input id="onboard-group-name" type="text" autocomplete="off" required />
+            </label>
+            <div class="onboard-row">
+              <label>
+                <span>Deadline</span>
+                <select id="onboard-deadline" required>
+                  <option>22:00</option>
+                  <option>20:00</option>
+                  <option>08:00</option>
+                </select>
+              </label>
+              <label>
+                <span>Commitment fee</span>
+                <select id="onboard-fee" required>
+                  <option>EUR 10</option>
+                  <option>EUR 5</option>
+                  <option>EUR 20</option>
+                </select>
+              </label>
+            </div>
+            <label>
+              <span>Backend API (optioneel)</span>
+              <input
+                id="onboard-api-base"
+                type="url"
+                inputmode="url"
+                autocomplete="off"
+                placeholder="http://localhost:8001"
+                aria-describedby="onboard-api-hint"
+              />
+              <small class="field-hint" id="onboard-api-hint">Alleen nodig voor echte Stripe/billing endpoints en group sync.</small>
+            </label>
+            <button class="primary-button full-width" type="submit">Start Pressure</button>
+            <button class="text-button full-width" id="skip-onboarding" type="button">Gebruik demo data</button>
+          </form>
+        </section>
+
+        <section class="screen active" id="screen-home" aria-labelledby="home-title" tabindex="-1">
           <header class="app-header">
             <button class="icon-button" id="menu-button" type="button" aria-label="Open menu">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -40,7 +106,7 @@
             </button>
             <div>
               <strong>PRESSURE</strong>
-              <span>Team Iron Pact</span>
+              <span id="home-group-title">Team Iron Pact</span>
             </div>
             <button class="icon-button" id="notifications-button" type="button" aria-label="Meldingen">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -72,11 +138,11 @@
           <section class="status-strip" aria-label="Belangrijkste status">
             <article>
               <span>Deadline</span>
-              <strong>22:00</strong>
+              <strong id="home-deadline">22:00</strong>
             </article>
             <article>
               <span>Fee</span>
-              <strong>EUR 10</strong>
+              <strong id="home-fee">EUR 10</strong>
             </article>
             <article>
               <span>Rank</span>
@@ -211,7 +277,7 @@
           </section>
         </section>
 
-        <section class="screen" id="screen-group" aria-labelledby="group-title">
+        <section class="screen" id="screen-group" aria-labelledby="group-title" tabindex="-1">
           <header class="app-header">
             <button class="icon-button" id="group-back" type="button" aria-label="Terug naar vandaag">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -220,7 +286,7 @@
             </button>
             <div>
               <strong id="group-title">Team Iron Pact</strong>
-              <span>4 leden, daily check-in</span>
+              <span id="group-subtitle">4 leden, daily check-in</span>
             </div>
             <button class="icon-button" id="invite-button" type="button" aria-label="Invite link">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -250,7 +316,7 @@
                 <em>Klaar</em>
               </article>
               <article class="member-row active">
-                <div class="avatar">Y</div>
+                <div class="avatar" id="group-user-avatar">Y</div>
                 <div>
                   <strong>Jij</strong>
                   <span id="group-user-status">2/4 klaar</span>
@@ -279,12 +345,12 @@
           <section class="content-card rule-card">
             <span class="section-label">Regels</span>
             <h2>Commitment fee staat aan</h2>
-            <p>Deadline 22:00. Wie niet 4/4 haalt betaalt EUR 10 als platform fee. Winnaars krijgen rank en perks, geen cash-out.</p>
+            <p id="group-rules-copy">Deadline 22:00. Wie niet 4/4 haalt betaalt EUR 10 als platform fee. Winnaars krijgen rank en perks, geen cash-out.</p>
             <button class="secondary-button" id="edit-rules" type="button">Bekijk regels</button>
           </section>
         </section>
 
-        <section class="screen" id="screen-camera" aria-labelledby="camera-title">
+        <section class="screen" id="screen-camera" aria-labelledby="camera-title" tabindex="-1">
           <div class="camera-stage">
             <video class="camera-video" id="camera-video" autoplay muted playsinline aria-label="Live camera preview"></video>
             <canvas class="vision-overlay" id="vision-overlay" aria-hidden="true"></canvas>
@@ -370,7 +436,7 @@
           </div>
         </section>
 
-        <section class="screen" id="screen-rank" aria-labelledby="rank-title">
+        <section class="screen" id="screen-rank" aria-labelledby="rank-title" tabindex="-1">
           <header class="app-header">
             <button class="icon-button" id="close-rank" type="button" aria-label="Terug naar vandaag">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -438,7 +504,7 @@
           </ol>
         </section>
 
-        <section class="screen" id="screen-profile" aria-labelledby="profile-title">
+        <section class="screen" id="screen-profile" aria-labelledby="profile-title" tabindex="-1">
           <header class="app-header">
             <button class="icon-button" id="profile-back" type="button" aria-label="Terug naar vandaag">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -458,7 +524,7 @@
           </header>
 
           <section class="hero-card profile-hero">
-            <div class="avatar large">Y</div>
+            <div class="avatar large" id="profile-avatar">Y</div>
             <div class="hero-copy">
               <span class="section-label">Jouw streak</span>
               <h1><span id="profile-streak">11</span> dagen actief</h1>
@@ -489,7 +555,7 @@
           </section>
         </section>
 
-        <section class="screen" id="screen-billing" aria-labelledby="billing-title">
+        <section class="screen" id="screen-billing" aria-labelledby="billing-title" tabindex="-1">
           <header class="app-header">
             <button class="icon-button" id="billing-back" type="button" aria-label="Terug naar profiel">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -610,7 +676,7 @@
           </section>
         </section>
 
-        <section class="screen" id="screen-create" aria-labelledby="create-title">
+        <section class="screen" id="screen-create" aria-labelledby="create-title" tabindex="-1">
           <header class="app-header">
             <button class="icon-button" id="create-back" type="button" aria-label="Terug naar vandaag">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -675,7 +741,7 @@
           </section>
         </section>
 
-        <section class="screen success-screen" id="screen-success" aria-labelledby="success-title">
+        <section class="screen success-screen" id="screen-success" aria-labelledby="success-title" tabindex="-1">
           <header class="success-top">
             <button class="icon-button muted" id="success-home" type="button" aria-label="Terug naar vandaag">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -747,7 +813,7 @@
           </button>
         </nav>
 
-        <section class="action-sheet" id="action-sheet" aria-live="polite" aria-hidden="true">
+        <section class="action-sheet" id="action-sheet" aria-live="polite" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="sheet-title" aria-describedby="sheet-message">
           <div class="sheet-panel">
             <span class="section-label" id="sheet-label">Update</span>
             <h2 id="sheet-title">Actie uitgevoerd</h2>
@@ -759,6 +825,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=14"></script>
+    <script src="./script.js?v=15"></script>
   </body>
 </html>

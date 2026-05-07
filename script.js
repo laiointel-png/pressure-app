@@ -1,4 +1,5 @@
 const screens = {
+  onboard: document.querySelector("#screen-onboard"),
   home: document.querySelector("#screen-home"),
   group: document.querySelector("#screen-group"),
   camera: document.querySelector("#screen-camera"),
@@ -10,6 +11,21 @@ const screens = {
 };
 
 const state = {
+  user: {
+    id: "user_demo",
+    name: "Jij",
+    email: "",
+    initial: "Y",
+  },
+  group: {
+    id: "group_demo",
+    name: "Team Iron Pact",
+    deadline: "22:00",
+    feeLabel: "EUR 10",
+    destinationLabel: "Platform fee, geen cash-out",
+    membersCount: 4,
+  },
+  apiBase: "",
   streak: 11,
   verifiedCount: 6,
   todayChecks: 2,
@@ -20,8 +36,74 @@ const state = {
   visionMode: "demo",
   cameraPaused: false,
   sheetAction: null,
+  sheetLastFocus: null,
   paymentSetup: false,
   feeDestination: "platform",
+};
+
+const STORAGE_KEY = "pressure.mvp.v1";
+const API_BASE_KEY = "pressureApiBase";
+
+function loadModel() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveModel(next) {
+  const current = loadModel() || {};
+  const merged = { ...current, ...next };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+  } catch {
+    // ignore storage quota errors in prototype
+  }
+  return merged;
+}
+
+function ensureIds() {
+  const uuid =
+    globalThis.crypto?.randomUUID?.bind(globalThis.crypto) ||
+    (() => `${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`);
+  if (!state.user.id) state.user.id = `user_${uuid()}`;
+  if (!state.group.id) state.group.id = `group_${uuid()}`;
+}
+
+function initialFromName(name) {
+  const trimmed = String(name || "").trim();
+  return trimmed ? trimmed.slice(0, 1).toUpperCase() : "Y";
+}
+
+function normalizeApiBase(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/\/+$/, "");
+}
+
+const api = {
+  get base() {
+    return state.apiBase;
+  },
+  async request(path, init) {
+    if (!this.base) throw new Error("no_api_base");
+    const url = `${this.base}${path}`;
+    const response = await fetch(url, init);
+    if (!response.ok) throw new Error(`${response.status}:${path}`);
+    return response.json();
+  },
+  post(path, body) {
+    return this.request(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  },
+  get(path) {
+    return this.request(path, { method: "GET" });
+  },
 };
 
 const localVisionEndpoint = ["localhost", "127.0.0.1"].includes(window.location.hostname)
@@ -88,6 +170,7 @@ function showSheet({ label = "Update", title, message, primary = "Ok", secondary
   const sheet = document.querySelector("#action-sheet");
   if (!sheet) return;
 
+  state.sheetLastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   state.sheetAction = onPrimary;
   setText("#sheet-label", label);
   setText("#sheet-title", title);
@@ -97,6 +180,9 @@ function showSheet({ label = "Update", title, message, primary = "Ok", secondary
   sheet.classList.add("open");
   sheet.setAttribute("aria-hidden", "false");
   setLiveStatus(title);
+
+  const primaryButton = document.querySelector("#sheet-primary");
+  if (primaryButton instanceof HTMLElement) primaryButton.focus();
 }
 
 function closeSheet() {
@@ -105,6 +191,8 @@ function closeSheet() {
   sheet.classList.remove("open");
   sheet.setAttribute("aria-hidden", "true");
   state.sheetAction = null;
+  if (state.sheetLastFocus instanceof HTMLElement) state.sheetLastFocus.focus();
+  state.sheetLastFocus = null;
 }
 
 function syncNav(activeName) {
@@ -131,6 +219,11 @@ function showScreen(name) {
   setLiveStatus(`${name} geopend`);
 
   if (name === "camera") startVision();
+
+  if (screen instanceof HTMLElement) screen.focus();
+
+  const frame = document.querySelector(".device-frame");
+  if (frame) frame.classList.toggle("onboarding", name === "onboard");
 }
 
 function remainingChecks() {
@@ -227,6 +320,64 @@ function updateHome() {
   updateExerciseRows();
 }
 
+function syncGroupUI() {
+  setText("#home-group-title", state.group.name);
+  setText("#group-title", state.group.name);
+  setText("#invite-preview-title", state.group.name);
+  setText("#group-subtitle", `${state.group.membersCount} leden, daily check-in`);
+  setText("#home-deadline", state.group.deadline);
+  setText("#home-fee", state.group.feeLabel);
+  setText(
+    "#group-rules-copy",
+    `Deadline ${state.group.deadline}. Wie niet 4/4 haalt betaalt ${state.group.feeLabel} als platform fee. Winnaars krijgen rank en perks, geen cash-out.`,
+  );
+
+  const groupNameInput = document.querySelector("#group-name-input");
+  if (groupNameInput) groupNameInput.value = state.group.name;
+  const deadlineInput = document.querySelector("#deadline-input");
+  if (deadlineInput) deadlineInput.value = state.group.deadline;
+  const feeInput = document.querySelector("#fee-input");
+  if (feeInput) feeInput.value = state.group.feeLabel;
+  const destinationInput = document.querySelector("#destination-input");
+  if (destinationInput) destinationInput.value = state.group.destinationLabel;
+}
+
+function syncUserUI() {
+  setText("#profile-avatar", state.user.initial || "Y");
+  setText("#group-user-avatar", state.user.initial || "Y");
+}
+
+function hydrateFromStorage() {
+  const stored = loadModel();
+  const apiBase =
+    window.PRESSURE_API_BASE ||
+    localStorage.getItem(API_BASE_KEY) ||
+    stored?.apiBase ||
+    "";
+
+  if (stored?.user) state.user = { ...state.user, ...stored.user };
+  if (stored?.group) state.group = { ...state.group, ...stored.group };
+  if (stored?.paymentSetup != null) state.paymentSetup = Boolean(stored.paymentSetup);
+  if (stored?.feeDestination) state.feeDestination = stored.feeDestination;
+
+  state.user.initial = state.user.initial || initialFromName(state.user.name);
+
+  state.apiBase = normalizeApiBase(apiBase);
+  if (state.apiBase) localStorage.setItem(API_BASE_KEY, state.apiBase);
+
+  ensureIds();
+}
+
+function persistCoreState() {
+  saveModel({
+    user: state.user,
+    group: state.group,
+    paymentSetup: state.paymentSetup,
+    feeDestination: state.feeDestination,
+    apiBase: state.apiBase,
+  });
+}
+
 function updateCamera() {
   const current = currentExercise();
   setText("#camera-title", current.title);
@@ -251,7 +402,7 @@ function addFeedItem(title, subtitle, tone = "") {
   const row = document.createElement("article");
   row.className = `feed-row ${tone}`.trim();
   row.innerHTML = `
-    <div class="avatar">Y</div>
+    <div class="avatar">${state.user.initial || "Y"}</div>
     <div>
       <strong>${title}</strong>
       <span>${subtitle}</span>
@@ -639,6 +790,7 @@ function chooseFeeDestination(model) {
 
   state.feeDestination = model;
   syncPaymentModel();
+  persistCoreState();
   showSheet({
     label: "Model gekozen",
     title: `Miss fees worden ${destinationLabel()}`,
@@ -647,14 +799,57 @@ function chooseFeeDestination(model) {
 }
 
 function setupPaymentPermission() {
-  state.paymentSetup = true;
-  syncPaymentModel();
-  showSheet({
-    label: "Stripe demo",
-    title: "Betaaltoestemming gesimuleerd",
-    message:
-      "Echte app: Stripe Billing voor abonnement, Checkout/SetupIntent voor toestemming, webhook bij gemiste check.",
-  });
+  setupPaymentPermissionLive();
+}
+
+async function setupPaymentPermissionLive() {
+  const email = state.user.email || document.querySelector("#onboard-email")?.value?.trim() || "";
+  const userId = state.user.id;
+
+  if (!state.apiBase) {
+    state.paymentSetup = true;
+    syncPaymentModel();
+    persistCoreState();
+    showSheet({
+      label: "Demo",
+      title: "Betaaltoestemming staat aan",
+      message: "Geen backend ingesteld. In productie loopt dit via Stripe Checkout/SetupIntent + webhook bij miss.",
+    });
+    return;
+  }
+
+  try {
+    const health = await api.get("/api/payments/health");
+    const ready = Boolean(health?.stripe_ready);
+    const checkout = await api.post("/api/payments/pass-checkout", {
+      user_id: userId,
+      email: email || "demo@example.com",
+    });
+
+    state.paymentSetup = true;
+    syncPaymentModel();
+    persistCoreState();
+
+    showSheet({
+      label: ready ? "Stripe" : "Demo backend",
+      title: "Billing flow gestart",
+      message: `Checkout URL ontvangen (${checkout.mode}). Open de link om je Pressure Pass te starten. Daarna kan de backend off-session miss fees verwerken.`,
+      primary: "Open Checkout",
+      secondary: "Sluiten",
+      onPrimary: () => {
+        if (checkout.checkout_url) window.open(checkout.checkout_url, "_blank", "noopener,noreferrer");
+      },
+    });
+  } catch (error) {
+    state.paymentSetup = true;
+    syncPaymentModel();
+    persistCoreState();
+    showSheet({
+      label: "Offline fallback",
+      title: "Backend niet bereikbaar",
+      message: "Toestemming staat lokaal aan zodat je UI flow klopt. Stel later een API base in voor echte Stripe calls.",
+    });
+  }
 }
 
 function simulateMissFee() {
@@ -678,10 +873,10 @@ function simulateMissFee() {
 }
 
 function updateInvitePreview() {
-  const name = document.querySelector("#group-name-input")?.value || "Nieuwe groep";
-  const deadline = document.querySelector("#deadline-input")?.value || "22:00";
-  const fee = document.querySelector("#fee-input")?.value || "EUR 10";
-  const destination = document.querySelector("#destination-input")?.value || "Platform fee, geen cash-out";
+  const name = document.querySelector("#group-name-input")?.value || state.group.name || "Nieuwe groep";
+  const deadline = document.querySelector("#deadline-input")?.value || state.group.deadline || "22:00";
+  const fee = document.querySelector("#fee-input")?.value || state.group.feeLabel || "EUR 10";
+  const destination = document.querySelector("#destination-input")?.value || state.group.destinationLabel || "Platform fee, geen cash-out";
 
   setText("#invite-preview-title", name);
   setText("#invite-preview-copy", `Daily 4/4 live checks. Deadline ${deadline}. Fee ${fee} als ${destination.toLowerCase()}.`);
@@ -815,7 +1010,34 @@ document.querySelector("#create-help").addEventListener("click", () => {
 document.querySelector("#create-group-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const name = document.querySelector("#group-name-input").value.trim() || "Nieuwe groep";
-  setText("#group-title", name);
+  const deadline = document.querySelector("#deadline-input")?.value || "22:00";
+  const feeLabel = document.querySelector("#fee-input")?.value || "EUR 10";
+  const destinationLabel = document.querySelector("#destination-input")?.value || "Platform fee, geen cash-out";
+
+  state.group = {
+    ...state.group,
+    name,
+    deadline,
+    feeLabel,
+    destinationLabel,
+  };
+  syncGroupUI();
+  persistCoreState();
+
+  if (state.apiBase) {
+    api
+      .post("/api/groups", {
+        group_id: state.group.id,
+        name,
+        deadline,
+        fee_label: feeLabel,
+        destination_label: destinationLabel,
+      })
+      .catch(() => {
+        // backend optional; local storage already updated
+      });
+  }
+
   showSheet({
     label: "Groep live",
     title: `${name} is aangemaakt`,
@@ -851,6 +1073,77 @@ document.querySelector("#action-sheet").addEventListener("click", (event) => {
   if (event.target.id === "action-sheet") closeSheet();
 });
 
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeSheet();
+});
+
+document.querySelector("#skip-onboarding")?.addEventListener("click", () => {
+  state.user = { ...state.user, name: "Jij", email: "", initial: "Y" };
+  state.group = { ...state.group, name: "Team Iron Pact" };
+  state.apiBase = "";
+  localStorage.removeItem(API_BASE_KEY);
+  persistCoreState();
+  syncGroupUI();
+  syncUserUI();
+  syncPaymentModel();
+  updateHome();
+  updateCamera();
+  showScreen("home");
+});
+
+document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const name = document.querySelector("#onboard-name")?.value?.trim() || "Jij";
+  const email = document.querySelector("#onboard-email")?.value?.trim() || "";
+  const groupName = document.querySelector("#onboard-group-name")?.value?.trim() || "Nieuwe groep";
+  const deadline = document.querySelector("#onboard-deadline")?.value || "22:00";
+  const feeLabel = document.querySelector("#onboard-fee")?.value || "EUR 10";
+  const apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+
+  state.user = {
+    ...state.user,
+    name,
+    email,
+    initial: initialFromName(name),
+  };
+  state.group = {
+    ...state.group,
+    name: groupName,
+    deadline,
+    feeLabel,
+    destinationLabel: "Platform fee, geen cash-out",
+  };
+  if (apiBase) {
+    state.apiBase = apiBase;
+    localStorage.setItem(API_BASE_KEY, apiBase);
+  } else {
+    state.apiBase = "";
+    localStorage.removeItem(API_BASE_KEY);
+  }
+
+  ensureIds();
+  persistCoreState();
+  syncGroupUI();
+  syncUserUI();
+  syncPaymentModel();
+  if (state.apiBase) {
+    api
+      .post("/api/groups", {
+        group_id: state.group.id,
+        name: state.group.name,
+        deadline: state.group.deadline,
+        fee_label: state.group.feeLabel,
+        destination_label: state.group.destinationLabel,
+      })
+      .catch(() => {
+        // backend optional; local storage already updated
+      });
+  }
+  updateHome();
+  updateCamera();
+  showScreen("home");
+});
+
 document.querySelectorAll("[data-screen-target]").forEach((button) => {
   button.addEventListener("click", () => showScreen(button.dataset.screenTarget));
 });
@@ -868,13 +1161,25 @@ window.addEventListener("hashchange", () => {
   showScreen("home");
 });
 
-updateHome();
-updateCamera();
+hydrateFromStorage();
+syncGroupUI();
+syncUserUI();
 syncPaymentModel();
 updateInvitePreview();
+updateHome();
+updateCamera();
 
+const stored = loadModel();
 const initialScreen = location.hash.replace("#", "");
-if (screens[initialScreen]) {
+if (!stored?.user?.name || stored?.onboardingComplete === false) {
+  const nameField = document.querySelector("#onboard-name");
+  const groupField = document.querySelector("#onboard-group-name");
+  if (nameField) nameField.value = state.user.name || "";
+  if (groupField) groupField.value = state.group.name || "";
+  const apiBaseField = document.querySelector("#onboard-api-base");
+  if (apiBaseField) apiBaseField.value = state.apiBase || "";
+  showScreen("onboard");
+} else if (screens[initialScreen]) {
   showScreen(initialScreen);
 } else {
   showScreen("home");
