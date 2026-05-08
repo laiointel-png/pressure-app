@@ -30,6 +30,7 @@ const required = [
   "invite-button",
   "action-sheet",
   "billing-check-stripe",
+  "billing-open-portal",
   "stripe-health-pill",
   "success-label",
   "success-copy",

@@ -65,6 +65,11 @@ class MissFeeRequest(BaseModel):
     amount_cents: int = Field(default=1000, ge=100, le=5000)
     reason: str = "missed_live_checks"
 
+class PortalRequest(BaseModel):
+    stripe_customer_id: str = ""
+    email: str = ""
+    return_url: str = ""
+
 
 def stripe_client_ready() -> bool:
     if stripe is None:
@@ -97,6 +102,23 @@ def demo_response(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
         **payload,
     }
 
+def _safe_return_url(raw: str) -> str:
+    candidate = (raw or "").strip()
+    if not candidate:
+        return f"{APP_URL}/#billing"
+
+    allow_prefixes = (
+        APP_URL,
+        "http://localhost",
+        "http://127.0.0.1",
+        "https://localhost",
+    )
+    if candidate.startswith(allow_prefixes):
+        return candidate
+    if "github.io" in candidate:
+        return candidate
+    return f"{APP_URL}/#billing"
+
 
 @app.get("/api/payments/health")
 def health() -> dict[str, Any]:
@@ -111,6 +133,33 @@ def health() -> dict[str, Any]:
         "stripe_mode": STRIPE_MODE,
         "live_key_detected": is_live_key,
         "live_key_allowed": bool(ALLOW_LIVE),
+    }
+
+@app.get("/api/payments/checkout-session/{session_id}")
+def get_checkout_session(session_id: str) -> dict[str, Any]:
+    if not stripe_client_ready():
+        return demo_response(
+            "checkout_session",
+            {
+                "session_id": session_id,
+                "customer_id": "",
+                "subscription_id": "",
+                "payment_status": "unknown",
+            },
+        )
+
+    session = stripe.checkout.Session.retrieve(session_id)
+    customer_id = session.get("customer") or ""
+    subscription_id = session.get("subscription") or ""
+    payment_status = session.get("payment_status") or ""
+    status = session.get("status") or ""
+    return {
+        "mode": "stripe",
+        "session_id": session_id,
+        "status": status,
+        "payment_status": payment_status,
+        "customer_id": customer_id,
+        "subscription_id": subscription_id,
     }
 
 
@@ -136,6 +185,28 @@ def create_pass_checkout(payload: CheckoutRequest) -> dict[str, Any]:
         },
     )
     return {"mode": "stripe", "checkout_url": session.url, "session_id": session.id}
+
+@app.post("/api/payments/customer-portal")
+def open_customer_portal(payload: PortalRequest) -> dict[str, Any]:
+    if not stripe_client_ready():
+        return demo_response("customer_portal", {"portal_url": f"{APP_URL}/#billing"})
+
+    customer_id = (payload.stripe_customer_id or "").strip()
+    email = (payload.email or "").strip()
+    if not customer_id and email:
+        customers = stripe.Customer.list(email=email, limit=1)
+        data = customers.get("data") if isinstance(customers, dict) else []
+        if data:
+            customer_id = data[0].get("id") or ""
+
+    if not customer_id:
+        return demo_response("customer_portal", {"portal_url": f"{APP_URL}/#billing"})
+
+    session = stripe.billing_portal.Session.create(
+        customer=customer_id,
+        return_url=_safe_return_url(payload.return_url),
+    )
+    return {"mode": "stripe", "portal_url": session.url, "customer_id": customer_id}
 
 
 @app.post("/api/payments/setup-mandate")

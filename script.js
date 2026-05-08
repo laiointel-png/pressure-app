@@ -50,6 +50,8 @@ const state = {
   lastBackendCheckinAt: 0,
   successKind: "workout",
   lastCheckoutSessionId: "",
+  stripeCustomerId: "",
+  stripeSubscriptionId: "",
 };
 
 const STORAGE_KEY = "pressure.mvp.v1";
@@ -791,6 +793,8 @@ function hydrateFromStorage() {
   if (stored?.lastBackendGroupSaveAt) state.lastBackendGroupSaveAt = Number(stored.lastBackendGroupSaveAt) || 0;
   if (stored?.lastBackendCheckinAt) state.lastBackendCheckinAt = Number(stored.lastBackendCheckinAt) || 0;
   if (stored?.lastCheckoutSessionId) state.lastCheckoutSessionId = String(stored.lastCheckoutSessionId || "");
+  if (stored?.stripeCustomerId) state.stripeCustomerId = String(stored.stripeCustomerId || "");
+  if (stored?.stripeSubscriptionId) state.stripeSubscriptionId = String(stored.stripeSubscriptionId || "");
 
   state.user.initial = state.user.initial || initialFromName(state.user.name);
 
@@ -816,6 +820,8 @@ function persistCoreState() {
     lastBackendGroupSaveAt: state.lastBackendGroupSaveAt,
     lastBackendCheckinAt: state.lastBackendCheckinAt,
     lastCheckoutSessionId: state.lastCheckoutSessionId,
+    stripeCustomerId: state.stripeCustomerId,
+    stripeSubscriptionId: state.stripeSubscriptionId,
     onboardingComplete: true,
   });
 }
@@ -1008,7 +1014,70 @@ function handleCheckoutReturnFromHash() {
   persistCoreState();
   syncPaymentModel();
   history.replaceState(null, "", "#success");
+  if (sessionId) fetchCheckoutSessionDetails(sessionId);
   return true;
+}
+
+async function fetchCheckoutSessionDetails(sessionId) {
+  if (!state.apiBase) return;
+  try {
+    const payload = await api.get(`/api/payments/checkout-session/${encodeURIComponent(sessionId)}`);
+    if (payload?.customer_id) state.stripeCustomerId = String(payload.customer_id);
+    if (payload?.subscription_id) state.stripeSubscriptionId = String(payload.subscription_id);
+    persistCoreState();
+  } catch {
+    // optional enrichment for portal access
+  }
+}
+
+async function openCustomerPortal() {
+  if (!state.apiBase) {
+    showSheet({
+      label: "Stripe",
+      title: "Geen API base ingesteld",
+      message: "Zet in onboarding een backend URL om het customer portal endpoint te gebruiken.",
+    });
+    return;
+  }
+
+  const button = document.querySelector("#billing-open-portal");
+  if (button instanceof HTMLButtonElement) {
+    button.disabled = true;
+    button.textContent = "Portal laden...";
+  }
+
+  try {
+    const email = state.user.email || "demo@example.com";
+    const returnUrl = `${window.location.origin}${window.location.pathname}#billing`;
+    const payload = await api.post("/api/payments/customer-portal", {
+      stripe_customer_id: state.stripeCustomerId,
+      email,
+      return_url: returnUrl,
+    });
+
+    const portalUrl = payload?.portal_url;
+    showSheet({
+      label: payload?.mode === "stripe" ? "Stripe" : "Demo",
+      title: "Customer portal klaar",
+      message: portalUrl ? "Open Stripe portal om je abonnement en payment method te beheren." : "Geen portal URL ontvangen.",
+      primary: "Open portal",
+      secondary: "Sluiten",
+      onPrimary: () => {
+        if (portalUrl) window.open(portalUrl, "_blank", "noopener,noreferrer");
+      },
+    });
+  } catch {
+    showSheet({
+      label: "Stripe",
+      title: "Portal mislukt",
+      message: "Backend endpoint faalde of Stripe is niet ready. UI blijft in demo mode.",
+    });
+  } finally {
+    if (button instanceof HTMLButtonElement) {
+      button.disabled = false;
+      button.textContent = "Beheer abonnement (Stripe)";
+    }
+  }
 }
 
 function syncCreateScreenUI() {
@@ -1419,6 +1488,9 @@ function syncPaymentModel() {
       : "Gebruiker moet expliciet akkoord geven voor latere fees.",
   );
 
+  const portal = document.querySelector("#billing-open-portal");
+  if (portal) portal.classList.toggle("hidden", !state.paymentSetup);
+
   const mandateRow = document.querySelector("#setup-mandate-row");
   if (mandateRow) {
     mandateRow.classList.toggle("done", state.paymentSetup);
@@ -1801,6 +1873,7 @@ document.querySelector("#billing-help").addEventListener("click", () => {
 });
 document.querySelector("#billing-check-stripe")?.addEventListener("click", () => checkStripeHealth());
 document.querySelector("#setup-payment").addEventListener("click", setupPaymentPermission);
+document.querySelector("#billing-open-portal")?.addEventListener("click", openCustomerPortal);
 document.querySelector("#simulate-miss-fee").addEventListener("click", simulateMissFee);
 document.querySelector("#charge-miss-fee")?.addEventListener("click", chargeMissFeeBackend);
 
