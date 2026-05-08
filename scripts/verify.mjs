@@ -25,6 +25,8 @@ const required = [
   "onboard-preview-group",
   "home-group-title",
   "group-title",
+  "group-hero-title",
+  "member-list",
   "invite-button",
   "action-sheet",
   "billing-check-stripe",
@@ -44,6 +46,7 @@ const iconButtonsMissingLabel = iconButtons.filter((tag) => !/aria-label="[^"]+"
 
 const billingConfirmOk = /id="billing-confirm"/.test(html) && /id="billing-confirm-hint"/.test(html);
 const onboardGroupLegendOk = /id="onboard-group-mode"[\s\S]*<legend>Groep<\/legend>/.test(html);
+const memberListOk = /id="member-list"[^>]*role="list"/.test(html) && /id="member-list"[^>]*aria-live="polite"/.test(html);
 
 if (duplicates.length) {
   console.error("FAIL: duplicate ids found:");
@@ -75,6 +78,11 @@ if (!billingConfirmOk) {
 
 if (!onboardGroupLegendOk) {
   console.error("FAIL: onboarding group fieldset missing legend");
+  process.exitCode = 1;
+}
+
+if (!memberListOk) {
+  console.error("FAIL: member-list missing role=list and/or aria-live=polite");
   process.exitCode = 1;
 }
 

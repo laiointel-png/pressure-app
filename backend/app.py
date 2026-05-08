@@ -30,6 +30,7 @@ except Exception:  # pragma: no cover - optional for prototype.
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 GROUPS_PATH = DATA_DIR / "groups.json"
+CHECKINS_PATH = DATA_DIR / "checkins.json"
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -73,11 +74,11 @@ def health() -> dict[str, Any]:
 
 
 class GroupPayload(BaseModel):
-  group_id: str
-  name: str
-  deadline: str = "22:00"
-  fee_label: str = "EUR 10"
-  destination_label: str = "Platform fee, geen cash-out"
+    group_id: str
+    name: str
+    deadline: str = "22:00"
+    fee_label: str = "EUR 10"
+    destination_label: str = "Platform fee, geen cash-out"
 
 
 @app.get("/api/groups")
@@ -102,6 +103,59 @@ def upsert_group(payload: GroupPayload) -> dict[str, Any]:
     groups[payload.group_id] = group
     _write_json(GROUPS_PATH, groups)
     return {"group": group}
+
+
+class CheckinPayload(BaseModel):
+    group_id: str
+    user_id: str
+    display_name: str = "Jij"
+    initial: str = "Y"
+    date: str = ""  # YYYY-MM-DD (optional; server will bucket under "today" if empty)
+    checks_completed: int = 0
+    checks_total: int = 4
+    verified: bool = False
+
+
+def _bucket_date(raw: str) -> str:
+    value = (raw or "").strip()
+    # Keep it deliberately simple for the prototype; frontend may send empty.
+    if value:
+        return value
+    from datetime import date
+
+    return date.today().isoformat()
+
+
+@app.get("/api/checkins/{group_id}/today")
+def list_today_checkins(group_id: str) -> dict[str, Any]:
+    checkins = _read_json(CHECKINS_PATH, default={})
+    today = _bucket_date("")
+    group_bucket = checkins.get(group_id, {})
+    today_bucket = group_bucket.get(today, {})
+    users = list(today_bucket.values()) if isinstance(today_bucket, dict) else []
+    return {"date": today, "group_id": group_id, "checkins": users}
+
+
+@app.post("/api/checkins")
+def upsert_checkin(payload: CheckinPayload) -> dict[str, Any]:
+    checkins = _read_json(CHECKINS_PATH, default={})
+    bucket = _bucket_date(payload.date)
+    group_bucket = checkins.setdefault(payload.group_id, {})
+    day_bucket = group_bucket.setdefault(bucket, {})
+
+    record = {
+        "group_id": payload.group_id,
+        "user_id": payload.user_id,
+        "display_name": payload.display_name,
+        "initial": payload.initial,
+        "date": bucket,
+        "checks_completed": max(0, min(payload.checks_completed, payload.checks_total)),
+        "checks_total": payload.checks_total,
+        "verified": bool(payload.verified),
+    }
+    day_bucket[payload.user_id] = record
+    _write_json(CHECKINS_PATH, checkins)
+    return {"checkin": record}
 
 
 if payments_app is not None:

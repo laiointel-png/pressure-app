@@ -47,6 +47,7 @@ const state = {
   sheetSecondaryAction: null,
   lastBackendSyncAt: 0,
   lastBackendGroupSaveAt: 0,
+  lastBackendCheckinAt: 0,
   successKind: "workout",
   lastCheckoutSessionId: "",
 };
@@ -259,9 +260,14 @@ function syncGroupSyncPill() {
     setGroupSyncStatus("neutral", "Local");
     return;
   }
-  const last = Math.max(state.lastBackendSyncAt || 0, state.lastBackendGroupSaveAt || 0);
+  const last = Math.max(state.lastBackendSyncAt || 0, state.lastBackendGroupSaveAt || 0, state.lastBackendCheckinAt || 0);
   if (last) {
-    const label = state.lastBackendSyncAt >= state.lastBackendGroupSaveAt ? "Synced" : "Saved";
+    const label =
+      state.lastBackendSyncAt >= state.lastBackendGroupSaveAt && state.lastBackendSyncAt >= state.lastBackendCheckinAt
+        ? "Synced"
+        : state.lastBackendGroupSaveAt >= state.lastBackendCheckinAt
+          ? "Saved"
+          : "Check-in";
     setGroupSyncStatus("ok", `${label} ${formatShortTime(last)}`);
     return;
   }
@@ -539,7 +545,10 @@ function showScreen(name) {
   if (name === "camera") startVision();
   if (name === "billing") checkStripeHealth({ silent: true });
   if (name === "create") syncCreateScreenUI();
-  if (name === "group") syncGroupSyncPill();
+  if (name === "group") {
+    syncGroupSyncPill();
+    syncCheckinsFromBackend({ silent: true });
+  }
   if (name === "success") syncSuccessScreen();
   if (name === "billing") maybeNotifyBillingCancel();
 
@@ -780,6 +789,7 @@ function hydrateFromStorage() {
   if (stored?.feeDestination) state.feeDestination = stored.feeDestination;
   if (stored?.lastBackendSyncAt) state.lastBackendSyncAt = Number(stored.lastBackendSyncAt) || 0;
   if (stored?.lastBackendGroupSaveAt) state.lastBackendGroupSaveAt = Number(stored.lastBackendGroupSaveAt) || 0;
+  if (stored?.lastBackendCheckinAt) state.lastBackendCheckinAt = Number(stored.lastBackendCheckinAt) || 0;
   if (stored?.lastCheckoutSessionId) state.lastCheckoutSessionId = String(stored.lastCheckoutSessionId || "");
 
   state.user.initial = state.user.initial || initialFromName(state.user.name);
@@ -804,9 +814,146 @@ function persistCoreState() {
     onboardingGroupMode: state.onboardingGroupMode,
     lastBackendSyncAt: state.lastBackendSyncAt,
     lastBackendGroupSaveAt: state.lastBackendGroupSaveAt,
+    lastBackendCheckinAt: state.lastBackendCheckinAt,
     lastCheckoutSessionId: state.lastCheckoutSessionId,
     onboardingComplete: true,
   });
+}
+
+const demoRoster = [
+  { userId: "user_mila", displayName: "Mila", initial: "M", checksCompleted: 4 },
+  { userId: "user_timothy", displayName: "Timothy", initial: "T", checksCompleted: 0 },
+  { userId: "user_layo", displayName: "Layo", initial: "L", checksCompleted: 3 },
+];
+
+function memberTone(member) {
+  if (member.checksCompleted >= exercises.length) return "done";
+  if (member.userId === state.user.id) return "active";
+  if (member.checksCompleted === 0) return "warning";
+  return "";
+}
+
+function memberStatusLabel(member) {
+  if (member.checksCompleted >= exercises.length) return "Klaar";
+  if (member.userId === state.user.id) return "Nu";
+  if (member.checksCompleted === 0) return "Risico";
+  return "Wacht";
+}
+
+function memberSubtitle(member) {
+  if (member.checksCompleted >= exercises.length) return "4/4 klaar";
+  return `${Math.max(0, member.checksCompleted)}/4 klaar`;
+}
+
+function buildRoster(checkins = []) {
+  const base = [
+    ...demoRoster.map((member) => ({ ...member })),
+    { userId: state.user.id, displayName: state.user.name || "Jij", initial: state.user.initial || "Y", checksCompleted: state.todayChecks },
+  ];
+
+  const byId = new Map(base.map((member) => [member.userId, member]));
+  checkins.forEach((raw) => {
+    const userId = String(raw?.user_id || raw?.userId || "").trim();
+    if (!userId) return;
+    const checksCompleted = Number(raw?.checks_completed ?? raw?.checksCompleted ?? 0) || 0;
+    const displayName = String(raw?.display_name || raw?.displayName || byId.get(userId)?.displayName || "Lid");
+    const initial = String(raw?.initial || byId.get(userId)?.initial || initialFromName(displayName));
+    const existing = byId.get(userId);
+    const next = {
+      userId,
+      displayName,
+      initial,
+      checksCompleted,
+      verified: Boolean(raw?.verified),
+    };
+    byId.set(userId, existing ? { ...existing, ...next } : next);
+  });
+
+  return [...byId.values()].sort((a, b) => {
+    if (a.userId === state.user.id) return -1;
+    if (b.userId === state.user.id) return 1;
+    return String(a.displayName).localeCompare(String(b.displayName), "nl");
+  });
+}
+
+function renderMemberList(checkins = []) {
+  const container = document.querySelector("#member-list");
+  if (!container) return;
+
+  const roster = buildRoster(checkins);
+  container.setAttribute("role", "list");
+  container.replaceChildren(
+    ...roster.map((member) => {
+      const row = document.createElement("article");
+      const tone = memberTone(member);
+      row.className = `member-row ${tone}`.trim();
+      row.setAttribute("role", "listitem");
+      const avatarClass = tone === "warning" ? "avatar danger" : "avatar";
+      row.innerHTML = `
+        <div class="${avatarClass}">${member.initial || "Y"}</div>
+        <div>
+          <strong>${member.userId === state.user.id ? "Jij" : member.displayName}</strong>
+          <span>${memberSubtitle(member)}</span>
+        </div>
+        <em>${memberStatusLabel(member)}</em>
+      `;
+      return row;
+    }),
+  );
+
+  const remaining = roster.filter((member) => member.checksCompleted < exercises.length).length;
+  setText("#group-hero-title", remaining === 1 ? "1 iemand moet nog checken" : `${remaining} mensen moeten nog checken`);
+}
+
+async function upsertCheckinToBackend({ silent = true } = {}) {
+  if (!state.apiBase) return false;
+  try {
+    await api.post("/api/checkins", {
+      group_id: state.group.id,
+      user_id: state.user.id,
+      display_name: state.user.name || "Jij",
+      initial: state.user.initial || "Y",
+      checks_completed: state.todayChecks,
+      checks_total: exercises.length,
+      verified: state.todayChecks >= exercises.length,
+    });
+    state.lastBackendCheckinAt = Date.now();
+    persistCoreState();
+    syncGroupSyncPill();
+    return true;
+  } catch {
+    if (!silent) {
+      showSheet({
+        label: "Backend",
+        title: "Check-in save failed",
+        message: "Backend endpoint is niet bereikbaar of gaf een error. UI blijft lokaal werken.",
+      });
+    }
+    return false;
+  }
+}
+
+async function syncCheckinsFromBackend({ silent = true } = {}) {
+  if (!state.apiBase) return [];
+  try {
+    const payload = await api.get(`/api/checkins/${encodeURIComponent(state.group.id)}/today`);
+    const checkins = Array.isArray(payload?.checkins) ? payload.checkins : [];
+    state.lastBackendSyncAt = Date.now();
+    persistCoreState();
+    syncGroupSyncPill();
+    renderMemberList(checkins);
+    return checkins;
+  } catch {
+    if (!silent) {
+      showSheet({
+        label: "Sync",
+        title: "Check-ins sync mislukt",
+        message: "Backend niet bereikbaar of CORS blokkeert `/api/checkins/...`. Demo lijst blijft zichtbaar.",
+      });
+    }
+    renderMemberList([]);
+    return [];
+  }
 }
 
 function syncSuccessScreen() {
@@ -1209,6 +1356,8 @@ function acceptCurrentExercise() {
     setText("#motion-score", "Actief");
     updateHome();
     updateCamera();
+    upsertCheckinToBackend({ silent: true });
+    renderMemberList([]);
     showSheet({
       label: "Check klaar",
       title: `${current.title} telt mee`,
@@ -1229,6 +1378,7 @@ function acceptCurrentExercise() {
   addFeedItem("Jij hebt 4/4 gehaald", "Workout telt vandaag", "good");
   updateHome();
   updateCamera();
+  upsertCheckinToBackend({ silent: true });
   state.successKind = "workout";
   showScreen("success");
 }
@@ -1720,7 +1870,10 @@ document.querySelector("#group-edit-current")?.addEventListener("click", () => {
   showScreen("create");
   document.querySelector("#group-name-input")?.focus();
 });
-document.querySelector("#group-sync")?.addEventListener("click", syncGroupsFromBackend);
+document.querySelector("#group-sync")?.addEventListener("click", async () => {
+  await syncGroupsFromBackend({ silent: true });
+  await syncCheckinsFromBackend({ silent: false });
+});
 
 document.querySelectorAll("#group-name-input, #deadline-input, #fee-input, #destination-input").forEach((field) => {
   field.addEventListener("input", updateInvitePreview);
@@ -1978,11 +2131,13 @@ if (invite) state.pendingInvite = invite;
 if (state.apiBase) {
   // Best-effort merge backend groups without interrupting the demo UX.
   syncGroupsFromBackend({ silent: true });
+  syncCheckinsFromBackend({ silent: true });
 }
 renderGroupSelector();
 syncGroupUI();
 syncUserUI();
 syncPaymentModel();
+renderMemberList([]);
 updateInvitePreview();
 updateHome();
 updateCamera();

@@ -343,14 +343,14 @@
           <section class="hero-card group-hero">
             <div class="hero-copy">
               <span class="section-label">Groep status</span>
-              <h1>2 mensen moeten nog checken</h1>
+              <h1 id="group-hero-title">2 mensen moeten nog checken</h1>
               <p>Stuur nu een reminder of open je eigen live check. Iedereen ziet de status.</p>
             </div>
             <button class="primary-button" id="send-reminder" type="button">Stuur reminder</button>
           </section>
 
           <section class="content-card" aria-label="Groepsleden">
-            <div class="member-list" id="member-list">
+            <div class="member-list" id="member-list" role="list" aria-live="polite">
               <article class="member-row done">
                 <div class="avatar">M</div>
                 <div>
