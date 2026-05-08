@@ -864,6 +864,11 @@ svg {
   border: 1px solid var(--line);
 }
 
+#screen-group .invite-card {
+  padding: 16px;
+  border: 1px solid var(--line);
+}
+
 #screen-group .rule-card {
   margin-top: 112px;
 }
@@ -968,6 +973,57 @@ svg {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.35;
+}
+
+.invite-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.invite-link-row input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--black);
+  font: inherit;
+}
+
+.invite-link-row input:focus {
+  outline: 3px solid rgba(255, 90, 0, 0.24);
+  outline-offset: 2px;
+}
+
+.billing-ids {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.billing-ids label {
+  display: grid;
+  gap: 7px;
+}
+
+.billing-ids input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--black);
+  font: inherit;
+}
+
+.billing-ids input:focus {
+  outline: 3px solid rgba(255, 90, 0, 0.24);
+  outline-offset: 2px;
 }
 
 .model-option.active {

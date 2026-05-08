@@ -52,6 +52,8 @@ const state = {
   lastCheckoutSessionId: "",
   stripeCustomerId: "",
   stripeSubscriptionId: "",
+  stripePaymentMethodId: "",
+  createDraftGroupId: "",
 };
 
 const STORAGE_KEY = "pressure.mvp.v1";
@@ -174,6 +176,62 @@ function buildJoinInviteLink({ groupId, apiBase = "" } = {}) {
 
   url.hash = "#onboard";
   return url.toString();
+}
+
+async function copyToClipboard(text) {
+  const value = String(text || "");
+  if (!value) return false;
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    try {
+      const textarea = document.createElement("textarea");
+      textarea.value = value;
+      textarea.setAttribute("readonly", "true");
+      textarea.style.position = "fixed";
+      textarea.style.top = "-1000px";
+      textarea.style.left = "-1000px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand("copy");
+      textarea.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function currentInviteGroupId() {
+  const createNew = Boolean(document.querySelector("#create-new-toggle")?.checked);
+  if (createNew && state.createDraftGroupId) return state.createDraftGroupId;
+  return state.group?.id || "";
+}
+
+function syncInviteLinkUI() {
+  const groupId = currentInviteGroupId();
+  const link = groupId ? buildJoinInviteLink({ groupId, apiBase: state.apiBase }) : "";
+
+  const createInput = document.querySelector("#invite-link-input");
+  if (createInput instanceof HTMLInputElement) createInput.value = link;
+  const groupInput = document.querySelector("#group-invite-link-input");
+  if (groupInput instanceof HTMLInputElement) groupInput.value = link;
+
+  setText("#invite-code", groupId || "group_...");
+  setText("#group-code-pill", groupId || "group_...");
+}
+
+async function copyCurrentInviteLink() {
+  const groupId = currentInviteGroupId();
+  const link = groupId ? buildJoinInviteLink({ groupId, apiBase: state.apiBase }) : "";
+  if (!link) return;
+  const ok = await copyToClipboard(link);
+  showSheet({
+    label: "Invite",
+    title: ok ? "Link gekopieerd" : "Kopiëren mislukt",
+    message: ok ? "De invite link staat op je clipboard." : "Browser blokkeerde clipboard. Selecteer de link en kopieer handmatig.",
+  });
 }
 
 function consumeJoinInviteFromUrl() {
@@ -725,6 +783,7 @@ function syncGroupUI() {
   if (destinationInput) destinationInput.value = state.group.destinationLabel;
 
   renderGroupSelector();
+  syncInviteLinkUI();
 }
 
 function syncUserUI() {
@@ -795,6 +854,7 @@ function hydrateFromStorage() {
   if (stored?.lastCheckoutSessionId) state.lastCheckoutSessionId = String(stored.lastCheckoutSessionId || "");
   if (stored?.stripeCustomerId) state.stripeCustomerId = String(stored.stripeCustomerId || "");
   if (stored?.stripeSubscriptionId) state.stripeSubscriptionId = String(stored.stripeSubscriptionId || "");
+  if (stored?.stripePaymentMethodId) state.stripePaymentMethodId = String(stored.stripePaymentMethodId || "");
 
   state.user.initial = state.user.initial || initialFromName(state.user.name);
 
@@ -822,6 +882,7 @@ function persistCoreState() {
     lastCheckoutSessionId: state.lastCheckoutSessionId,
     stripeCustomerId: state.stripeCustomerId,
     stripeSubscriptionId: state.stripeSubscriptionId,
+    stripePaymentMethodId: state.stripePaymentMethodId,
     onboardingComplete: true,
   });
 }
@@ -1025,6 +1086,7 @@ async function fetchCheckoutSessionDetails(sessionId) {
     if (payload?.customer_id) state.stripeCustomerId = String(payload.customer_id);
     if (payload?.subscription_id) state.stripeSubscriptionId = String(payload.subscription_id);
     persistCoreState();
+    syncPaymentModel();
   } catch {
     // optional enrichment for portal access
   }
@@ -1088,10 +1150,14 @@ function syncCreateScreenUI() {
   const submit = document.querySelector('#create-group-form button[type="submit"]');
   const creatingNew = Boolean(createNewToggle?.checked);
 
+  if (creatingNew && !state.createDraftGroupId) state.createDraftGroupId = newId("group");
+  if (!creatingNew) state.createDraftGroupId = "";
+
   if (title) title.textContent = creatingNew ? "Groep maken" : "Groep bewerken";
   if (label) label.textContent = creatingNew ? "Nieuwe groep" : "Bewerk groep";
   if (headline) headline.textContent = creatingNew ? "Maak de regels eerst duidelijk." : "Update de regels voor je groep.";
   if (submit) submit.textContent = creatingNew ? "Maak groep live" : "Sla wijzigingen op";
+  syncInviteLinkUI();
 }
 
 function updateCamera() {
@@ -1496,6 +1562,11 @@ function syncPaymentModel() {
     mandateRow.classList.toggle("done", state.paymentSetup);
     mandateRow.classList.toggle("active", !state.paymentSetup);
   }
+
+  const customerId = document.querySelector("#stripe-customer-id");
+  if (customerId instanceof HTMLInputElement) customerId.value = state.stripeCustomerId || "";
+  const paymentMethodId = document.querySelector("#stripe-payment-method-id");
+  if (paymentMethodId instanceof HTMLInputElement) paymentMethodId.value = state.stripePaymentMethodId || "";
 }
 
 function chooseFeeDestination(model) {
@@ -1622,9 +1693,17 @@ async function chargeMissFeeBackend() {
   }
 
   try {
+    const customerId =
+      state.stripeCustomerId ||
+      document.querySelector("#stripe-customer-id")?.value?.trim() ||
+      "cus_demo";
+    const paymentMethodId =
+      state.stripePaymentMethodId ||
+      document.querySelector("#stripe-payment-method-id")?.value?.trim() ||
+      "pm_demo";
     const response = await api.post("/api/payments/miss-fee", {
-      stripe_customer_id: "cus_demo",
-      payment_method_id: "pm_demo",
+      stripe_customer_id: customerId,
+      payment_method_id: paymentMethodId,
       user_id: state.user.id,
       group_id: state.group.id,
       amount_cents: 1000,
@@ -1746,6 +1825,7 @@ function updateInvitePreview() {
 
   setText("#invite-preview-title", name);
   setText("#invite-preview-copy", `Daily 4/4 live checks. Deadline ${deadline}. Fee ${fee} als ${destination.toLowerCase()}.`);
+  syncInviteLinkUI();
 }
 
 document.querySelector("#open-camera").addEventListener("click", openCamera);
@@ -1877,6 +1957,15 @@ document.querySelector("#billing-open-portal")?.addEventListener("click", openCu
 document.querySelector("#simulate-miss-fee").addEventListener("click", simulateMissFee);
 document.querySelector("#charge-miss-fee")?.addEventListener("click", chargeMissFeeBackend);
 
+document.querySelector("#stripe-customer-id")?.addEventListener("input", (event) => {
+  state.stripeCustomerId = event.target.value.trim();
+  persistCoreState();
+});
+document.querySelector("#stripe-payment-method-id")?.addEventListener("input", (event) => {
+  state.stripePaymentMethodId = event.target.value.trim();
+  persistCoreState();
+});
+
 document.querySelectorAll(".model-option").forEach((button) => {
   button.addEventListener("click", () => chooseFeeDestination(button.dataset.model));
 });
@@ -1898,8 +1987,10 @@ document.querySelector("#create-group-form").addEventListener("submit", async (e
   const createNew = Boolean(document.querySelector("#create-new-toggle")?.checked);
 
   if (createNew) {
-    state.group = { ...state.group, id: newId("group") };
+    const nextId = state.createDraftGroupId || newId("group");
+    state.group = { ...state.group, id: nextId };
     state.activeGroupId = state.group.id;
+    state.createDraftGroupId = "";
   }
 
   state.group = {
@@ -1926,6 +2017,14 @@ document.querySelector("#create-group-form").addEventListener("submit", async (e
       : "Invite link, regels en betaalmodel staan klaar. Koppel later een backend voor sync.",
     primary: "Open groep",
     onPrimary: () => showScreen("group"),
+  });
+});
+
+document.querySelector("#invite-link-copy")?.addEventListener("click", copyCurrentInviteLink);
+document.querySelector("#group-invite-copy")?.addEventListener("click", copyCurrentInviteLink);
+document.querySelectorAll("#invite-link-input, #group-invite-link-input").forEach((input) => {
+  input.addEventListener("click", () => {
+    if (input instanceof HTMLInputElement) input.select();
   });
 });
 
