@@ -54,6 +54,7 @@ const state = {
   stripeSubscriptionId: "",
   stripePaymentMethodId: "",
   createDraftGroupId: "",
+  inviteGroupPayload: null,
 };
 
 const STORAGE_KEY = "pressure.mvp.v1";
@@ -159,12 +160,70 @@ function normalizeApiBase(value) {
   return trimmed.replace(/\/+$/, "");
 }
 
+function encodeInvitePayload(payload) {
+  try {
+    const json = JSON.stringify(payload || {});
+    const bytes = new TextEncoder().encode(json);
+    let binary = "";
+    bytes.forEach((byte) => {
+      binary += String.fromCharCode(byte);
+    });
+    const b64 = btoa(binary);
+    return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  } catch {
+    return "";
+  }
+}
+
+function decodeInvitePayload(raw) {
+  try {
+    const value = String(raw || "").trim();
+    if (!value) return null;
+    if (value.length > 512) return null;
+    const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
+    const parsed = JSON.parse(json);
+    if (!parsed || typeof parsed !== "object") return null;
+    if (parsed.v !== 1) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function currentInviteGroupSnapshot({ groupId } = {}) {
+  const fallback = state.group || {};
+  const id = String(groupId || fallback.id || "").trim();
+  if (!id) return null;
+
+  const fromForm = {
+    name: document.querySelector("#group-name-input")?.value,
+    deadline: document.querySelector("#deadline-input")?.value,
+    feeLabel: document.querySelector("#fee-input")?.value,
+    destinationLabel: document.querySelector("#destination-input")?.value,
+  };
+
+  const name = String(fromForm.name || fallback.name || "Nieuwe groep").trim();
+  const deadline = String(fromForm.deadline || fallback.deadline || "22:00").trim();
+  const feeLabel = String(fromForm.feeLabel || fallback.feeLabel || "EUR 10").trim();
+  const destinationLabel = String(fromForm.destinationLabel || fallback.destinationLabel || "Platform fee, geen cash-out").trim();
+
+  return { v: 1, id, name, deadline, feeLabel, destinationLabel };
+}
+
 function buildJoinInviteLink({ groupId, apiBase = "" } = {}) {
   const joinCode = String(groupId || "").trim();
   if (!joinCode) return "";
 
   const url = new URL(window.location.href);
   url.searchParams.set("join", joinCode);
+
+  const payload = currentInviteGroupSnapshot({ groupId: joinCode });
+  const encoded = encodeInvitePayload(payload);
+  if (encoded) url.searchParams.set("g", encoded);
+  else url.searchParams.delete("g");
 
   const normalizedApiBase = normalizeApiBase(apiBase);
   const includeApiBase = normalizedApiBase && !/localhost|127\.0\.0\.1/i.test(normalizedApiBase);
@@ -238,14 +297,16 @@ function consumeJoinInviteFromUrl() {
   const url = new URL(window.location.href);
   const join = url.searchParams.get("join")?.trim() || "";
   const apiBase = normalizeApiBase(url.searchParams.get("apiBase") || url.searchParams.get("api") || "");
+  const groupPayload = decodeInvitePayload(url.searchParams.get("g") || "");
   if (!join) return null;
 
   url.searchParams.delete("join");
   url.searchParams.delete("apiBase");
   url.searchParams.delete("api");
+  url.searchParams.delete("g");
   history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 
-  return { join, apiBase };
+  return { join, apiBase, groupPayload };
 }
 
 function parseHashRoute(hashValue = window.location.hash) {
@@ -512,6 +573,7 @@ function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
   state.onboardingMode = mode;
   state.onboardingReturnTo = returnTo;
   const invite = state.pendingInvite;
+  state.inviteGroupPayload = invite?.groupPayload || null;
 
   const backButton = document.querySelector("#onboard-back");
   if (backButton) backButton.classList.toggle("hidden", mode !== "edit");
@@ -532,10 +594,10 @@ function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
 
   if (nameField) nameField.value = state.user.name || "";
   if (emailField) emailField.value = state.user.email || "";
-  if (groupField) groupField.value = state.group.name || "";
+  if (groupField) groupField.value = invite?.groupPayload?.name || state.group.name || "";
   if (groupCodeField) groupCodeField.value = invite?.join || "";
-  if (deadlineField) deadlineField.value = state.group.deadline || "22:00";
-  if (feeField) feeField.value = state.group.feeLabel || "EUR 10";
+  if (deadlineField) deadlineField.value = invite?.groupPayload?.deadline || state.group.deadline || "22:00";
+  if (feeField) feeField.value = invite?.groupPayload?.feeLabel || state.group.feeLabel || "EUR 10";
   if (apiBaseField) apiBaseField.value = invite?.apiBase || state.apiBase || "";
 
   if (invite?.join) state.onboardingGroupMode = "join";
@@ -2106,6 +2168,7 @@ async function previewJoinGroup() {
   const apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
   const codeField = document.querySelector("#onboard-group-code");
   const groupCode = codeField?.value?.trim() || "";
+  const invitePayload = state.inviteGroupPayload;
 
   if (!groupCode) {
     showSheet({
@@ -2118,10 +2181,27 @@ async function previewJoinGroup() {
   }
 
   if (!apiBase) {
+    if (invitePayload?.id && invitePayload.id === groupCode) {
+      showSheet({
+        label: "Invite",
+        title: "Group info uit invite",
+        message: `${invitePayload.name || "Groep"} · Deadline ${invitePayload.deadline || "22:00"} · Fee ${
+          invitePayload.feeLabel || "EUR 10"
+        }. Backend is optioneel voor sync/billing.`,
+        primary: "Gebruik deze group",
+        onPrimary: () => {
+          setOnboardingGroupMode("join", { focus: false });
+          const code = document.querySelector("#onboard-group-code");
+          if (code) code.value = invitePayload.id;
+        },
+      });
+      return;
+    }
     showSheet({
       label: "Join",
-      title: "Backend API is nodig",
-      message: "Zet een API base (bijv. http://localhost:8001) om `/api/groups/{id}` op te halen.",
+      title: "Backend API ontbreekt",
+      message:
+        "Zonder backend kun je alleen joinen via een invite link met group info. Zet anders een API base (bijv. http://localhost:8001) om `/api/groups/{id}` op te halen.",
     });
     return;
   }
@@ -2177,6 +2257,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
   const deadline = document.querySelector("#onboard-deadline")?.value || "22:00";
   const feeLabel = document.querySelector("#onboard-fee")?.value || "EUR 10";
   const apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+  const invitePayload = state.inviteGroupPayload;
 
   state.user = {
     ...state.user,
@@ -2234,10 +2315,31 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
     }
 
     if (!state.apiBase) {
+      if (invitePayload?.id && invitePayload.id === groupCode) {
+        const group = normalizeBackendGroup(invitePayload) || {
+          id: invitePayload.id,
+          name: invitePayload.name,
+          deadline: invitePayload.deadline,
+          feeLabel: invitePayload.feeLabel,
+          destinationLabel: invitePayload.destinationLabel,
+          membersCount: 4,
+        };
+        state.group = { ...state.group, ...group, id: group.id };
+        state.activeGroupId = group.id;
+        finalize();
+        showSheet({
+          label: "Invite",
+          title: "Je zit nu in de group",
+          message: `${state.group.name} · Offline invite (zonder backend).`,
+        });
+        return;
+      }
+
       showSheet({
         label: "Join",
-        title: "Backend API is nodig",
-        message: "Zet een API base (bijv. http://localhost:8001) om de group op te halen.",
+        title: "Backend API ontbreekt",
+        message:
+          "Zet een API base (bijv. http://localhost:8001) om de group op te halen, of open een invite link die group info bevat.",
       });
       return;
     }

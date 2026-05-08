@@ -27,6 +27,7 @@ The prototype now persists user + group configuration in `localStorage` under `p
 
 - First visit shows the onboarding screen.
 - Group creation updates the stored config and propagates to Home/Group/Create screens.
+- Invite links now include a compact, self-contained group snapshot (`?join=...&g=...`) so teammates can join even without a backend.
 
 ## Prototype assets
 
