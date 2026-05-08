@@ -18,7 +18,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050505'/%3E%3Cpath d='M18 42 44 16' stroke='%23ff5a00' stroke-width='9' stroke-linecap='round'/%3E%3Cpath d='M20 20h20v20H20z' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E"
     />
-	    <link rel="stylesheet" href="./styles.css?v=17" />
+	    <link rel="stylesheet" href="./styles.css?v=18" />
   </head>
   <body>
     <main class="app-shell">
@@ -831,9 +831,9 @@
                 <path d="m5 12 4 4L19 6" />
               </svg>
             </span>
-            <span class="section-label">Workout telt</span>
+            <span class="section-label" id="success-label">Workout telt</span>
             <h1 id="success-title">4/4 checks gehaald</h1>
-            <p>Je streak is beschermd. De groep ziet dat je workout verified is.</p>
+            <p id="success-copy">Je streak is beschermd. De groep ziet dat je workout verified is.</p>
             <div class="status-strip success-summary">
               <article>
                 <span>Streak</span>
@@ -841,7 +841,7 @@
               </article>
               <article>
                 <span>Fee</span>
-                <strong>EUR 0</strong>
+                <strong id="success-fee">EUR 0</strong>
               </article>
             </div>
             <button class="primary-button" id="success-rank" type="button">Bekijk rank</button>
@@ -900,6 +900,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=17"></script>
+    <script src="./script.js?v=18"></script>
   </body>
 </html>

@@ -47,6 +47,8 @@ const state = {
   sheetSecondaryAction: null,
   lastBackendSyncAt: 0,
   lastBackendGroupSaveAt: 0,
+  successKind: "workout",
+  lastCheckoutSessionId: "",
 };
 
 const STORAGE_KEY = "pressure.mvp.v1";
@@ -183,6 +185,16 @@ function consumeJoinInviteFromUrl() {
   history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 
   return { join, apiBase };
+}
+
+function parseHashRoute(hashValue = window.location.hash) {
+  const raw = String(hashValue || "");
+  if (!raw || raw === "#") return { screen: "home", params: new URLSearchParams() };
+  const trimmed = raw.startsWith("#") ? raw.slice(1) : raw;
+  const [screenRaw, queryRaw] = trimmed.split("?");
+  const screen = screenRaw || "home";
+  const params = new URLSearchParams(queryRaw || "");
+  return { screen, params };
 }
 
 const api = {
@@ -515,7 +527,11 @@ function showScreen(name) {
   });
 
   const hash = name === "home" ? location.pathname : `#${name}`;
-  if (location.hash !== `#${name}`) history.replaceState(null, "", hash);
+  if (name === "home") {
+    history.replaceState(null, "", hash);
+  } else if (!location.hash.startsWith(`#${name}`)) {
+    history.replaceState(null, "", hash);
+  }
 
   syncNav(name);
   setLiveStatus(`${name} geopend`);
@@ -524,6 +540,8 @@ function showScreen(name) {
   if (name === "billing") checkStripeHealth({ silent: true });
   if (name === "create") syncCreateScreenUI();
   if (name === "group") syncGroupSyncPill();
+  if (name === "success") syncSuccessScreen();
+  if (name === "billing") maybeNotifyBillingCancel();
 
   if (screen instanceof HTMLElement) screen.focus();
 
@@ -762,6 +780,7 @@ function hydrateFromStorage() {
   if (stored?.feeDestination) state.feeDestination = stored.feeDestination;
   if (stored?.lastBackendSyncAt) state.lastBackendSyncAt = Number(stored.lastBackendSyncAt) || 0;
   if (stored?.lastBackendGroupSaveAt) state.lastBackendGroupSaveAt = Number(stored.lastBackendGroupSaveAt) || 0;
+  if (stored?.lastCheckoutSessionId) state.lastCheckoutSessionId = String(stored.lastCheckoutSessionId || "");
 
   state.user.initial = state.user.initial || initialFromName(state.user.name);
 
@@ -785,8 +804,64 @@ function persistCoreState() {
     onboardingGroupMode: state.onboardingGroupMode,
     lastBackendSyncAt: state.lastBackendSyncAt,
     lastBackendGroupSaveAt: state.lastBackendGroupSaveAt,
+    lastCheckoutSessionId: state.lastCheckoutSessionId,
     onboardingComplete: true,
   });
+}
+
+function syncSuccessScreen() {
+  const label = document.querySelector("#success-label");
+  const title = document.querySelector("#success-title");
+  const copy = document.querySelector("#success-copy");
+  const fee = document.querySelector("#success-fee");
+  const streak = document.querySelector("#success-streak");
+
+  const kind = state.successKind || "workout";
+  if (kind === "pass") {
+    if (label) label.textContent = "Pressure Pass";
+    if (title) title.textContent = "Checkout gelukt";
+    if (copy) {
+      copy.textContent = state.lastCheckoutSessionId
+        ? `Je abonnement is gestart. Session: ${state.lastCheckoutSessionId}.`
+        : "Je abonnement is gestart. Je groep kan nu miss fees off-session verwerken.";
+    }
+    if (fee) fee.textContent = "EUR 0";
+    if (streak) streak.textContent = String(state.streak + 1);
+    return;
+  }
+
+  if (label) label.textContent = "Workout telt";
+  if (title) title.textContent = "4/4 checks gehaald";
+  if (copy) copy.textContent = "Je streak is beschermd. De groep ziet dat je workout verified is.";
+  if (fee) fee.textContent = "EUR 0";
+  if (streak) streak.textContent = String(state.streak + 1);
+}
+
+function maybeNotifyBillingCancel() {
+  const { params } = parseHashRoute();
+  if (params.get("cancel") !== "1") return;
+  history.replaceState(null, "", "#billing");
+  showSheet({
+    label: "Checkout",
+    title: "Checkout geannuleerd",
+    message: "Geen probleem. Je kunt later opnieuw starten. Demo state blijft actief zolang Stripe niet gekoppeld is.",
+  });
+}
+
+function handleCheckoutReturnFromHash() {
+  const { screen, params } = parseHashRoute();
+  if (screen !== "success") return false;
+  const kind = (params.get("kind") || "").trim().toLowerCase();
+  if (kind !== "pass") return false;
+
+  state.successKind = "pass";
+  const sessionId = (params.get("session_id") || params.get("session") || "").trim();
+  if (sessionId) state.lastCheckoutSessionId = sessionId;
+  state.paymentSetup = true;
+  persistCoreState();
+  syncPaymentModel();
+  history.replaceState(null, "", "#success");
+  return true;
 }
 
 function syncCreateScreenUI() {
@@ -839,6 +914,7 @@ function addFeedItem(title, subtitle, tone = "") {
 
 function openCamera() {
   if (state.todayChecks >= exercises.length) {
+    state.successKind = "workout";
     showScreen("success");
     return;
   }
@@ -1153,6 +1229,7 @@ function acceptCurrentExercise() {
   addFeedItem("Jij hebt 4/4 gehaald", "Workout telt vandaag", "good");
   updateHome();
   updateCamera();
+  state.successKind = "workout";
   showScreen("success");
 }
 
@@ -1886,9 +1963,10 @@ document.querySelectorAll(".exercise-row[data-exercise-index]").forEach((row) =>
 });
 
 window.addEventListener("hashchange", () => {
-  const nextScreen = location.hash.replace("#", "");
-  if (screens[nextScreen]) {
-    showScreen(nextScreen);
+  const { screen } = parseHashRoute();
+  if (screens[screen]) {
+    handleCheckoutReturnFromHash();
+    showScreen(screen);
     return;
   }
   showScreen("home");
@@ -1910,12 +1988,13 @@ updateHome();
 updateCamera();
 
 const stored = loadModel();
-const initialScreen = location.hash.replace("#", "");
+const { screen: initialScreen } = parseHashRoute();
 if (invite?.join) {
   enterOnboarding({ mode: "setup", returnTo: "home" });
 } else if (!stored?.onboardingComplete || !stored?.user?.name) {
   enterOnboarding({ mode: "setup", returnTo: "home" });
 } else if (screens[initialScreen]) {
+  handleCheckoutReturnFromHash();
   showScreen(initialScreen);
 } else {
   showScreen("home");

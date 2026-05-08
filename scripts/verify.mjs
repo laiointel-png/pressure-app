@@ -29,6 +29,9 @@ const required = [
   "action-sheet",
   "billing-check-stripe",
   "stripe-health-pill",
+  "success-label",
+  "success-copy",
+  "success-fee",
 ];
 const missing = required.filter((id) => !counts.has(id));
 

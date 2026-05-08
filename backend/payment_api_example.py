@@ -127,8 +127,8 @@ def create_pass_checkout(payload: CheckoutRequest) -> dict[str, Any]:
         mode="subscription",
         customer_email=payload.email,
         line_items=[{"price": price_id, "quantity": 1}],
-        success_url=f"{APP_URL}/#billing",
-        cancel_url=f"{APP_URL}/#profile",
+        success_url=f"{APP_URL}/#success?kind=pass&session_id={{CHECKOUT_SESSION_ID}}",
+        cancel_url=f"{APP_URL}/#billing?cancel=1",
         metadata={
             "pressure_user_id": payload.user_id,
             "pressure_group_id": payload.group_id or "",
