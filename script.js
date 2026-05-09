@@ -113,6 +113,7 @@ function normalizeBackendGroup(raw) {
   if (!raw || typeof raw !== "object") return null;
   const id = raw.id || raw.group_id || raw.groupId;
   if (!id) return null;
+  const joinCode = String(raw.joinCode || raw.join_code || "").trim();
   return {
     id,
     name: raw.name || "Nieuwe groep",
@@ -120,6 +121,7 @@ function normalizeBackendGroup(raw) {
     feeLabel: raw.feeLabel || raw.fee_label || "EUR 10",
     destinationLabel: raw.destinationLabel || raw.destination_label || "Platform fee, geen cash-out",
     membersCount: Number(raw.membersCount ?? raw.members_count ?? 4) || 4,
+    joinCode,
   };
 }
 
@@ -278,14 +280,14 @@ function currentInviteGroupSnapshot({ groupId } = {}) {
   return { v: 1, id, name, deadline, feeLabel, destinationLabel };
 }
 
-function buildJoinInviteLink({ groupId, apiBase = "" } = {}) {
-  const joinCode = String(groupId || "").trim();
-  if (!joinCode) return "";
+function buildJoinInviteLink({ groupId, joinCode, apiBase = "" } = {}) {
+  const code = String(joinCode || groupId || "").trim();
+  if (!code) return "";
 
   const url = new URL(window.location.href);
-  url.searchParams.set("join", joinCode);
+  url.searchParams.set("join", code);
 
-  const payload = currentInviteGroupSnapshot({ groupId: joinCode });
+  const payload = currentInviteGroupSnapshot({ groupId });
   const encoded = encodeInvitePayload(payload);
   if (encoded) url.searchParams.set("g", encoded);
   else url.searchParams.delete("g");
@@ -333,22 +335,35 @@ function currentInviteGroupId() {
   return state.group?.id || "";
 }
 
+function currentInviteJoinCode() {
+  const groupId = currentInviteGroupId();
+  if (!groupId) return "";
+  const joinCode = String(state.groups?.[groupId]?.joinCode || state.groups?.[groupId]?.join_code || "").trim();
+  return joinCode || groupId;
+}
+
 function syncInviteLinkUI() {
   const groupId = currentInviteGroupId();
-  const link = groupId ? buildJoinInviteLink({ groupId, apiBase: state.apiBase }) : "";
+  const joinCode = currentInviteJoinCode();
+  const link = groupId ? buildJoinInviteLink({ groupId, joinCode, apiBase: state.apiBase }) : "";
 
   const createInput = document.querySelector("#invite-link-input");
   if (createInput instanceof HTMLInputElement) createInput.value = link;
   const groupInput = document.querySelector("#group-invite-link-input");
   if (groupInput instanceof HTMLInputElement) groupInput.value = link;
 
-  setText("#invite-code", groupId || "group_...");
-  setText("#group-code-pill", groupId || "group_...");
+  setText("#invite-code", joinCode || "code_...");
+  setText("#group-code-pill", joinCode || "code_...");
 }
 
 async function copyCurrentInviteLink() {
   const groupId = currentInviteGroupId();
-  const link = groupId ? buildJoinInviteLink({ groupId, apiBase: state.apiBase }) : "";
+  let joinCode = currentInviteJoinCode();
+  if (state.apiBase && groupId && joinCode === groupId) {
+    const created = await ensureInviteCodeFromBackend(groupId, { silent: true });
+    if (created) joinCode = created;
+  }
+  const link = groupId ? buildJoinInviteLink({ groupId, joinCode, apiBase: state.apiBase }) : "";
   if (!link) return;
   const ok = await copyToClipboard(link);
   showSheet({
@@ -2209,6 +2224,7 @@ async function saveGroupToBackend(group, { silent = true } = {}) {
       deadline: normalized.deadline,
       fee_label: normalized.feeLabel,
       destination_label: normalized.destinationLabel,
+      join_code: normalized.joinCode || "",
     });
     state.lastBackendGroupSaveAt = Date.now();
     persistCoreState();
@@ -2223,6 +2239,31 @@ async function saveGroupToBackend(group, { silent = true } = {}) {
       });
     }
     return false;
+  }
+}
+
+async function ensureInviteCodeFromBackend(groupId, { silent = true } = {}) {
+  if (!state.apiBase) return "";
+  const id = String(groupId || "").trim();
+  if (!id) return "";
+  try {
+    const payload = await api.post("/api/invites", { group_id: id });
+    const joinCode = String(payload?.join_code || "").trim();
+    if (!joinCode) return "";
+    state.groups[id] = { ...(state.groups[id] || {}), joinCode };
+    if (state.group?.id === id) state.group = { ...state.group, joinCode };
+    persistCoreState();
+    syncInviteLinkUI();
+    return joinCode;
+  } catch {
+    if (!silent) {
+      showSheet({
+        label: "Invite",
+        title: "Invite code maken mislukt",
+        message: "Backend endpoint faalde of CORS blokkeert `/api/invites`. Invite link blijft werken met group id.",
+      });
+    }
+    return "";
   }
 }
 
@@ -2323,7 +2364,8 @@ function normalizeImportedGroup(raw) {
   const feeLabel = String(raw.feeLabel || raw.fee_label || "EUR 10").trim() || "EUR 10";
   const destinationLabel = String(raw.destinationLabel || raw.destination_label || "Platform fee, geen cash-out").trim()
     || "Platform fee, geen cash-out";
-  return { id, name, deadline, feeLabel, destinationLabel };
+  const joinCode = String(raw.joinCode || raw.join_code || "").trim();
+  return { id, name, deadline, feeLabel, destinationLabel, joinCode };
 }
 
 function buildGroupsExportPayload() {
@@ -2881,7 +2923,10 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
     syncGroupUI();
     syncUserUI();
     syncPaymentModel();
-    if (state.onboardingGroupMode === "create") await saveGroupToBackend(state.group, { silent: true });
+    if (state.onboardingGroupMode === "create") {
+      await saveGroupToBackend(state.group, { silent: true });
+      await ensureInviteCodeFromBackend(state.group.id, { silent: true });
+    }
     if (state.apiBase) {
       await upsertProfileToBackend({ silent: true });
       await upsertMemberToBackend(
@@ -2919,7 +2964,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
     }
 
     if (!state.apiBase) {
-      if (invitePayload?.id && invitePayload.id === groupCode) {
+      if (invitePayload?.id) {
         const group = normalizeBackendGroup(invitePayload) || {
           id: invitePayload.id,
           name: invitePayload.name,
@@ -2927,8 +2972,9 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
           feeLabel: invitePayload.feeLabel,
           destinationLabel: invitePayload.destinationLabel,
           membersCount: 4,
+          joinCode: groupCode,
         };
-        state.group = { ...state.group, ...group, id: group.id };
+        state.group = { ...state.group, ...group, id: group.id, joinCode: groupCode };
         state.activeGroupId = group.id;
         finalize();
         showSheet({
@@ -2949,11 +2995,13 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
     }
 
     api
-      .get(`/api/groups/${encodeURIComponent(groupCode)}`)
-      .then((payload) => {
-        const group = normalizeBackendGroup(payload?.group);
+      .get(`/api/invites/${encodeURIComponent(groupCode)}`)
+      .then((payload) => payload?.group || payload)
+      .catch(() => api.get(`/api/groups/${encodeURIComponent(groupCode)}`).then((payload) => payload?.group || payload))
+      .then((rawGroup) => {
+        const group = normalizeBackendGroup(rawGroup);
         if (!group) throw new Error("group_invalid");
-        state.group = { ...state.group, ...group, id: group.id };
+        state.group = { ...state.group, ...group, id: group.id, joinCode: group.joinCode || groupCode };
         state.activeGroupId = group.id;
         finalize();
         showSheet({
@@ -2966,7 +3014,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
         showSheet({
           label: "Join",
           title: "Join mislukt",
-          message: "Group niet gevonden of backend gaf een error. Check code, backend en CORS.",
+          message: "Invite code / group id niet gevonden of backend gaf een error. Check code, backend en CORS.",
         });
       });
     return;

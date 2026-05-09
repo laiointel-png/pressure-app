@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import secrets
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -33,6 +34,7 @@ GROUPS_PATH = DATA_DIR / "groups.json"
 CHECKINS_PATH = DATA_DIR / "checkins.json"
 MEMBERS_PATH = DATA_DIR / "members.json"
 PROFILES_PATH = DATA_DIR / "profiles.json"
+INVITES_PATH = DATA_DIR / "invites.json"
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -83,6 +85,7 @@ class GroupPayload(BaseModel):
     deadline: str = "22:00"
     fee_label: str = "EUR 10"
     destination_label: str = "Platform fee, geen cash-out"
+    join_code: str = ""
 
 
 @app.get("/api/groups")
@@ -103,7 +106,13 @@ def get_group(group_id: str) -> dict[str, Any]:
 @app.post("/api/groups")
 def upsert_group(payload: GroupPayload) -> dict[str, Any]:
     groups = _read_json(GROUPS_PATH, default={})
+    previous = groups.get(payload.group_id) if isinstance(groups, dict) else None
+    join_code = (payload.join_code or "").strip()
+    if not join_code and isinstance(previous, dict):
+        join_code = str(previous.get("join_code") or "").strip()
+
     group = payload.model_dump()
+    group["join_code"] = join_code
     groups[payload.group_id] = group
     _write_json(GROUPS_PATH, groups)
     return {"group": group}
@@ -217,6 +226,73 @@ def upsert_profile(payload: ProfilePayload) -> dict[str, Any]:
     profiles[payload.user_id] = profile
     _write_json(PROFILES_PATH, profiles)
     return {"profile": profile}
+
+
+class InviteCreatePayload(BaseModel):
+    group_id: str
+    requested_code: str = ""
+
+
+def _normalize_join_code(raw: str) -> str:
+    value = (raw or "").strip()
+    if not value:
+        return ""
+    allowed = "".join(ch for ch in value if ch.isalnum() or ch in {"_", "-"})
+    return allowed[:64]
+
+
+def _generate_join_code() -> str:
+    return f"code_{secrets.token_hex(3)}"
+
+
+@app.get("/api/invites/{join_code}")
+def resolve_invite(join_code: str) -> dict[str, Any]:
+    code = _normalize_join_code(join_code)
+    invites = _read_json(INVITES_PATH, default={})
+    group_id = invites.get(code) if isinstance(invites, dict) else None
+    if not group_id:
+        raise HTTPException(status_code=404, detail="invite_not_found")
+    groups = _read_json(GROUPS_PATH, default={})
+    group = groups.get(group_id) if isinstance(groups, dict) else None
+    if not group:
+        raise HTTPException(status_code=404, detail="group_not_found")
+    return {"join_code": code, "group": group}
+
+
+@app.post("/api/invites")
+def create_invite(payload: InviteCreatePayload) -> dict[str, Any]:
+    group_id = (payload.group_id or "").strip()
+    if not group_id:
+        raise HTTPException(status_code=400, detail="missing_group_id")
+
+    groups = _read_json(GROUPS_PATH, default={})
+    group = groups.get(group_id) if isinstance(groups, dict) else None
+    if not group:
+        raise HTTPException(status_code=404, detail="group_not_found")
+
+    invites = _read_json(INVITES_PATH, default={})
+    if not isinstance(invites, dict):
+        invites = {}
+
+    existing_code = str(group.get("join_code") or "").strip()
+    if existing_code and invites.get(existing_code) == group_id:
+        return {"join_code": existing_code, "group_id": group_id}
+
+    requested = _normalize_join_code(payload.requested_code)
+    code = requested or _generate_join_code()
+    attempts = 0
+    while code in invites and invites.get(code) != group_id:
+        attempts += 1
+        if attempts > 20:
+            raise HTTPException(status_code=500, detail="invite_code_collision")
+        code = _generate_join_code()
+
+    invites[code] = group_id
+    group["join_code"] = code
+    groups[group_id] = group
+    _write_json(INVITES_PATH, invites)
+    _write_json(GROUPS_PATH, groups)
+    return {"join_code": code, "group_id": group_id}
 
 
 if payments_app is not None:

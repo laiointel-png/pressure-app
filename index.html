@@ -18,7 +18,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050505'/%3E%3Cpath d='M18 42 44 16' stroke='%23ff5a00' stroke-width='9' stroke-linecap='round'/%3E%3Cpath d='M20 20h20v20H20z' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E"
     />
-	    <link rel="stylesheet" href="./styles.css?v=25" />
+	    <link rel="stylesheet" href="./styles.css?v=26" />
   </head>
   <body>
     <main class="app-shell">
@@ -75,7 +75,7 @@
 	                <input id="onboard-group-mode-join" type="radio" name="onboardGroupMode" value="join" />
 	                <span>
 	                  <strong>Join bestaande groep</strong>
-	                  <small>Gebruik group code (via backend)</small>
+	                  <small>Gebruik invite code (via backend)</small>
 	                </span>
 	              </label>
 	            </fieldset>
@@ -105,16 +105,16 @@
 	            </div>
 	            <div id="onboard-join-fields" class="hidden" aria-live="polite">
 	              <label>
-	                <span>Group code</span>
+	                <span>Invite code</span>
 	                <input
 	                  id="onboard-group-code"
 	                  type="text"
 	                  autocomplete="off"
 	                  inputmode="text"
-	                  placeholder="group_..."
+	                  placeholder="code_..."
 	                  aria-describedby="onboard-group-code-hint"
 	                />
-		                <small class="field-hint" id="onboard-group-code-hint">Vul de code in die je via de group owner krijgt (of open hun invite link). Backend is optioneel als de invite link group info bevat.</small>
+	              <small class="field-hint" id="onboard-group-code-hint">Vul de invite code in die je via de group owner krijgt (of open hun invite link). Backend is optioneel als de invite link group info bevat.</small>
 		              </label>
 	              <button class="secondary-button full-width" id="onboard-preview-group" type="button">Check group</button>
 	            </div>
@@ -399,7 +399,7 @@
 	                <span class="section-label">Invite</span>
 	                <h2 id="group-invite-title">Deel group link</h2>
 	              </div>
-	              <span class="small-pill neutral" id="group-code-pill" aria-label="Group code">group_...</span>
+	              <span class="small-pill neutral" id="group-code-pill" aria-label="Invite code">code_...</span>
 	            </div>
 	            <div class="invite-link-row">
 	              <input
@@ -885,7 +885,7 @@
 	              <input id="invite-link-input" type="url" readonly inputmode="url" autocomplete="off" aria-label="Invite link" />
 	              <button class="secondary-button" id="invite-link-copy" type="button">Kopieer</button>
 	            </div>
-	            <small class="field-hint" id="invite-code-hint">Group code: <span id="invite-code">group_...</span></small>
+	            <small class="field-hint" id="invite-code-hint">Invite code: <span id="invite-code">code_...</span></small>
 	          </section>
         </section>
 
@@ -973,6 +973,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=25"></script>
+    <script src="./script.js?v=26"></script>
   </body>
 </html>
