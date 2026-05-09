@@ -32,6 +32,7 @@ DATA_DIR = Path(__file__).resolve().parent / "data"
 GROUPS_PATH = DATA_DIR / "groups.json"
 CHECKINS_PATH = DATA_DIR / "checkins.json"
 MEMBERS_PATH = DATA_DIR / "members.json"
+PROFILES_PATH = DATA_DIR / "profiles.json"
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -70,6 +71,7 @@ def health() -> dict[str, Any]:
         "features": {
             "groups": True,
             "members": True,
+            "profiles": True,
             "payments": payments_app is not None,
         },
     }
@@ -188,6 +190,33 @@ def upsert_member(payload: MemberPayload) -> dict[str, Any]:
     group_bucket[payload.user_id] = record
     _write_json(MEMBERS_PATH, members)
     return {"member": record}
+
+
+class ProfilePayload(BaseModel):
+    user_id: str
+    name: str = ""
+    email: str = ""
+    stripe_customer_id: str = ""
+    stripe_subscription_id: str = ""
+    stripe_payment_method_id: str = ""
+
+
+@app.get("/api/profiles/{user_id}")
+def get_profile(user_id: str) -> dict[str, Any]:
+    profiles = _read_json(PROFILES_PATH, default={})
+    profile = profiles.get(user_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="profile_not_found")
+    return {"profile": profile}
+
+
+@app.post("/api/profiles")
+def upsert_profile(payload: ProfilePayload) -> dict[str, Any]:
+    profiles = _read_json(PROFILES_PATH, default={})
+    profile = payload.model_dump()
+    profiles[payload.user_id] = profile
+    _write_json(PROFILES_PATH, profiles)
+    return {"profile": profile}
 
 
 if payments_app is not None:

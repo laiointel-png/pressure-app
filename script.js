@@ -123,6 +123,18 @@ function normalizeBackendGroup(raw) {
   };
 }
 
+function normalizeBackendProfile(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const userId = String(raw.user_id || raw.userId || raw.id || "").trim();
+  if (!userId) return null;
+  const name = String(raw.name || "").trim();
+  const email = String(raw.email || "").trim();
+  const stripeCustomerId = String(raw.stripe_customer_id || raw.stripeCustomerId || "").trim();
+  const stripeSubscriptionId = String(raw.stripe_subscription_id || raw.stripeSubscriptionId || "").trim();
+  const stripePaymentMethodId = String(raw.stripe_payment_method_id || raw.stripePaymentMethodId || "").trim();
+  return { userId, name, email, stripeCustomerId, stripeSubscriptionId, stripePaymentMethodId };
+}
+
 function upsertGroup(group) {
   if (!group?.id) return;
   state.groups[group.id] = { ...(state.groups[group.id] || {}), ...group };
@@ -832,6 +844,7 @@ async function fetchSetupSessionDetails(sessionId) {
     if (intent?.payment_method_id) state.paymentMandateSetup = true;
     persistCoreState();
     syncPaymentModel();
+    upsertProfileToBackend({ silent: true });
 
     showSheet({
       label: intent?.mode === "stripe" ? "Stripe" : "Demo",
@@ -1262,6 +1275,85 @@ async function syncMembersFromBackend({ silent = true } = {}) {
   }
 }
 
+function mergeIfEmpty(currentValue, nextValue) {
+  const current = String(currentValue || "").trim();
+  const next = String(nextValue || "").trim();
+  if (current) return currentValue;
+  return next || currentValue;
+}
+
+async function upsertProfileToBackend({ silent = true } = {}) {
+  if (!state.apiBase) return false;
+  const userId = state.user?.id;
+  if (!userId) return false;
+  try {
+    await api.post("/api/profiles", {
+      user_id: userId,
+      name: state.user?.name || "",
+      email: state.user?.email || "",
+      stripe_customer_id: state.stripeCustomerId || "",
+      stripe_subscription_id: state.stripeSubscriptionId || "",
+      stripe_payment_method_id: state.stripePaymentMethodId || "",
+    });
+    return true;
+  } catch {
+    if (!silent) {
+      showSheet({
+        label: "Backend",
+        title: "Profile save failed",
+        message: "Backend endpoint is niet bereikbaar of gaf een error. Local storage blijft leidend.",
+      });
+    }
+    return false;
+  }
+}
+
+async function syncProfileFromBackend({ silent = true } = {}) {
+  if (!state.apiBase) return false;
+  const userId = state.user?.id;
+  if (!userId) return false;
+  try {
+    const payload = await api.get(`/api/profiles/${encodeURIComponent(userId)}`);
+    const normalized = normalizeBackendProfile(payload?.profile);
+    if (!normalized) return false;
+
+    state.user = {
+      ...state.user,
+      name: mergeIfEmpty(state.user?.name, normalized.name),
+      email: mergeIfEmpty(state.user?.email, normalized.email),
+      initial: initialFromName(mergeIfEmpty(state.user?.name, normalized.name)),
+    };
+    state.stripeCustomerId = mergeIfEmpty(state.stripeCustomerId, normalized.stripeCustomerId);
+    state.stripeSubscriptionId = mergeIfEmpty(state.stripeSubscriptionId, normalized.stripeSubscriptionId);
+    state.stripePaymentMethodId = mergeIfEmpty(state.stripePaymentMethodId, normalized.stripePaymentMethodId);
+    if (state.stripePaymentMethodId) state.paymentMandateSetup = true;
+
+    persistCoreState();
+    syncUserUI();
+    syncPaymentModel();
+    return true;
+  } catch {
+    if (!silent) {
+      showSheet({
+        label: "Backend",
+        title: "Profile sync failed",
+        message: "Backend endpoint is niet bereikbaar of gaf een error. Local storage blijft leidend.",
+      });
+    }
+    return false;
+  }
+}
+
+let profileSaveTimer = null;
+function scheduleProfileSave() {
+  if (!state.apiBase) return;
+  if (profileSaveTimer) window.clearTimeout(profileSaveTimer);
+  profileSaveTimer = window.setTimeout(() => {
+    profileSaveTimer = null;
+    upsertProfileToBackend({ silent: true });
+  }, 600);
+}
+
 async function syncCheckinsFromBackend({ silent = true } = {}) {
   if (!state.apiBase) return [];
   try {
@@ -1349,6 +1441,7 @@ async function fetchCheckoutSessionDetails(sessionId) {
     if (payload?.subscription_id) state.stripeSubscriptionId = String(payload.subscription_id);
     persistCoreState();
     syncPaymentModel();
+    upsertProfileToBackend({ silent: true });
   } catch {
     // optional enrichment for portal access
   }
@@ -2463,12 +2556,14 @@ document.querySelector("#stripe-customer-id")?.addEventListener("input", (event)
   state.stripeCustomerId = event.target.value.trim();
   persistCoreState();
   syncPaymentModel();
+  if (state.apiBase) scheduleProfileSave();
 });
 document.querySelector("#stripe-payment-method-id")?.addEventListener("input", (event) => {
   state.stripePaymentMethodId = event.target.value.trim();
   state.paymentMandateSetup = Boolean(state.stripePaymentMethodId);
   persistCoreState();
   syncPaymentModel();
+  if (state.apiBase) scheduleProfileSave();
 });
 
 document.querySelectorAll(".model-option").forEach((button) => {
@@ -2734,6 +2829,11 @@ document.querySelector("#skip-onboarding")?.addEventListener("click", () => {
 
 document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
   event.preventDefault();
+  const form = event.target;
+  if (form instanceof HTMLFormElement && !form.checkValidity()) {
+    form.reportValidity();
+    return;
+  }
   const name = document.querySelector("#onboard-name")?.value?.trim() || "Jij";
   const email = document.querySelector("#onboard-email")?.value?.trim() || "";
   const mode = document.querySelector('input[name="onboardGroupMode"]:checked')?.value || "create";
@@ -2781,8 +2881,9 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
     syncGroupUI();
     syncUserUI();
     syncPaymentModel();
-    if (state.onboardingGroupMode === "create") saveGroupToBackend(state.group, { silent: true });
+    if (state.onboardingGroupMode === "create") await saveGroupToBackend(state.group, { silent: true });
     if (state.apiBase) {
+      await upsertProfileToBackend({ silent: true });
       await upsertMemberToBackend(
         {
           groupId: state.group.id,
@@ -2872,21 +2973,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
   }
 
   state.onboardingGroupMode = "create";
-
-  upsertGroup(state.group);
-  persistCoreState();
-  syncGroupUI();
-  syncUserUI();
-  syncPaymentModel();
-  saveGroupToBackend(state.group, { silent: true });
-  pushLocalGroupsToBackend({ silent: true });
-  if (state.apiBase) {
-    testApiConnection(state.apiBase, { silent: true });
-    checkStripeHealth({ silent: true });
-  }
-  updateHome();
-  updateCamera();
-  showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
+  finalize();
 });
 
 document.querySelectorAll("[data-screen-target]").forEach((button) => {
@@ -2909,6 +2996,7 @@ window.addEventListener("hashchange", () => {
 
 async function bootstrapBackendSync() {
   if (!state.apiBase) return;
+  await syncProfileFromBackend({ silent: true });
   await syncGroupsFromBackend({ silent: true });
   await syncMembersFromBackend({ silent: true });
   await syncCheckinsFromBackend({ silent: true });
