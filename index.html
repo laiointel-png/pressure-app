@@ -18,7 +18,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050505'/%3E%3Cpath d='M18 42 44 16' stroke='%23ff5a00' stroke-width='9' stroke-linecap='round'/%3E%3Cpath d='M20 20h20v20H20z' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E"
     />
-	    <link rel="stylesheet" href="./styles.css?v=22" />
+	    <link rel="stylesheet" href="./styles.css?v=23" />
   </head>
   <body>
     <main class="app-shell">
@@ -767,6 +767,17 @@
 	                <span>Stripe customer id (optioneel)</span>
 	                <input id="stripe-customer-id" type="text" inputmode="text" autocomplete="off" placeholder="cus_..." />
 	              </label>
+                <label>
+                  <span>Subscription id (readonly)</span>
+                  <input
+                    id="stripe-subscription-id"
+                    type="text"
+                    inputmode="text"
+                    autocomplete="off"
+                    placeholder="sub_..."
+                    readonly
+                  />
+                </label>
 	              <label>
 	                <span>Payment method id (optioneel)</span>
 	                <input id="stripe-payment-method-id" type="text" inputmode="text" autocomplete="off" placeholder="pm_..." />
@@ -961,6 +972,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=22"></script>
+    <script src="./script.js?v=23"></script>
   </body>
 </html>

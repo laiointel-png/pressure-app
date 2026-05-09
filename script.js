@@ -395,15 +395,17 @@ function syncGroupSyncPill() {
   setGroupSyncStatus("neutral", "Ongetest");
 }
 
-async function testApiConnection(rawBase) {
+async function testApiConnection(rawBase, { silent = false } = {}) {
   const base = normalizeApiBase(rawBase);
   if (!base) {
     setApiStatus("bad", "Offline");
-    showSheet({
-      label: "API",
-      title: "Geen API base ingevuld",
-      message: "Zet een URL zoals http://localhost:8001 in om group sync + Stripe demo endpoints te testen.",
-    });
+    if (!silent) {
+      showSheet({
+        label: "API",
+        title: "Geen API base ingevuld",
+        message: "Zet een URL zoals http://localhost:8001 in om group sync + Stripe demo endpoints te testen.",
+      });
+    }
     return;
   }
 
@@ -433,20 +435,24 @@ async function testApiConnection(rawBase) {
       setApiStatus("bad", "Partial");
     }
 
-    showSheet({
-      label: "API check",
-      title: "Backend bereikbaar",
-      message: `Groups: ${groupsReady ? "ok" : "uit"}. Payments: ${paymentsReady ? "ok" : "uit"}. Stripe: ${
-        stripeReady ? "ready" : "demo"
-      }.`,
-    });
+    if (!silent) {
+      showSheet({
+        label: "API check",
+        title: "Backend bereikbaar",
+        message: `Groups: ${groupsReady ? "ok" : "uit"}. Payments: ${paymentsReady ? "ok" : "uit"}. Stripe: ${
+          stripeReady ? "ready" : "demo"
+        }.`,
+      });
+    }
   } catch {
     setApiStatus("bad", "Offline");
-    showSheet({
-      label: "API",
-      title: "Backend niet bereikbaar",
-      message: "Check of de server draait en CORS toestaat. UI blijft werken met localStorage demo state.",
-    });
+    if (!silent) {
+      showSheet({
+        label: "API",
+        title: "Backend niet bereikbaar",
+        message: "Check of de server draait en CORS toestaat. UI blijft werken met localStorage demo state.",
+      });
+    }
   }
 }
 
@@ -1617,7 +1623,7 @@ function syncPaymentModel() {
   );
 
   const portal = document.querySelector("#billing-open-portal");
-  if (portal) portal.classList.toggle("hidden", !state.paymentSetup);
+  if (portal) portal.classList.toggle("hidden", !(state.paymentSetup && state.apiBase));
 
   const mandateRow = document.querySelector("#setup-mandate-row");
   if (mandateRow) {
@@ -1627,6 +1633,8 @@ function syncPaymentModel() {
 
   const customerId = document.querySelector("#stripe-customer-id");
   if (customerId instanceof HTMLInputElement) customerId.value = state.stripeCustomerId || "";
+  const subscriptionId = document.querySelector("#stripe-subscription-id");
+  if (subscriptionId instanceof HTMLInputElement) subscriptionId.value = state.stripeSubscriptionId || "";
   const paymentMethodId = document.querySelector("#stripe-payment-method-id");
   if (paymentMethodId instanceof HTMLInputElement) paymentMethodId.value = state.stripePaymentMethodId || "";
 }
@@ -2460,6 +2468,10 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
     syncPaymentModel();
     if (state.onboardingGroupMode === "create") saveGroupToBackend(state.group, { silent: true });
     if (state.apiBase) pushLocalGroupsToBackend({ silent: true });
+    if (state.apiBase) {
+      testApiConnection(state.apiBase, { silent: true });
+      checkStripeHealth({ silent: true });
+    }
     updateHome();
     updateCamera();
     showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
@@ -2541,6 +2553,10 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
   syncPaymentModel();
   saveGroupToBackend(state.group, { silent: true });
   pushLocalGroupsToBackend({ silent: true });
+  if (state.apiBase) {
+    testApiConnection(state.apiBase, { silent: true });
+    checkStripeHealth({ silent: true });
+  }
   updateHome();
   updateCamera();
   showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
