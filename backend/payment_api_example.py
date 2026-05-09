@@ -53,6 +53,14 @@ class CheckoutRequest(BaseModel):
     group_id: str = ""
 
 
+class SetupSessionRequest(BaseModel):
+    user_id: str
+    email: str
+    group_id: str = ""
+    stripe_customer_id: str = ""
+    currency: str = "eur"
+
+
 class SetupRequest(BaseModel):
     stripe_customer_id: str
 
@@ -64,6 +72,7 @@ class MissFeeRequest(BaseModel):
     group_id: str
     amount_cents: int = Field(default=1000, ge=100, le=5000)
     reason: str = "missed_live_checks"
+
 
 class PortalRequest(BaseModel):
     stripe_customer_id: str = ""
@@ -142,8 +151,10 @@ def get_checkout_session(session_id: str) -> dict[str, Any]:
             "checkout_session",
             {
                 "session_id": session_id,
+                "session_mode": "",
                 "customer_id": "",
                 "subscription_id": "",
+                "setup_intent_id": "",
                 "payment_status": "unknown",
             },
         )
@@ -153,13 +164,17 @@ def get_checkout_session(session_id: str) -> dict[str, Any]:
     subscription_id = session.get("subscription") or ""
     payment_status = session.get("payment_status") or ""
     status = session.get("status") or ""
+    session_mode = session.get("mode") or ""
+    setup_intent_id = session.get("setup_intent") or ""
     return {
         "mode": "stripe",
         "session_id": session_id,
+        "session_mode": session_mode,
         "status": status,
         "payment_status": payment_status,
         "customer_id": customer_id,
         "subscription_id": subscription_id,
+        "setup_intent_id": setup_intent_id,
     }
 
 
@@ -185,6 +200,72 @@ def create_pass_checkout(payload: CheckoutRequest) -> dict[str, Any]:
         },
     )
     return {"mode": "stripe", "checkout_url": session.url, "session_id": session.id}
+
+
+@app.post("/api/payments/setup-session")
+def create_setup_session(payload: SetupSessionRequest) -> dict[str, Any]:
+    if not stripe_client_ready():
+        return demo_response(
+            "setup_checkout",
+            {"checkout_url": f"{APP_URL}/#billing", "currency": payload.currency or "eur"},
+        )
+
+    currency = (payload.currency or "eur").strip().lower()
+    customer_id = (payload.stripe_customer_id or "").strip()
+    params: dict[str, Any] = {
+        "mode": "setup",
+        "currency": currency,
+        "success_url": f"{APP_URL}/#billing?setup=1&session_id={{CHECKOUT_SESSION_ID}}",
+        "cancel_url": f"{APP_URL}/#billing?setup_cancel=1",
+        "setup_intent_data": {
+            "usage": "off_session",
+            "metadata": {
+                "purpose": "future_pressure_miss_fees",
+                "pressure_user_id": payload.user_id,
+                "pressure_group_id": payload.group_id or "",
+            },
+        },
+        "metadata": {
+            "pressure_user_id": payload.user_id,
+            "pressure_group_id": payload.group_id or "",
+            "product": "pressure_miss_fee_mandate",
+        },
+    }
+
+    if customer_id:
+        params["customer"] = customer_id
+    else:
+        params["customer_creation"] = "always"
+        params["customer_email"] = payload.email
+
+    session = stripe.checkout.Session.create(**params)
+    return {"mode": "stripe", "checkout_url": session.url, "session_id": session.id}
+
+
+@app.get("/api/payments/setup-intent/{intent_id}")
+def get_setup_intent(intent_id: str) -> dict[str, Any]:
+    if not stripe_client_ready():
+        return demo_response(
+            "setup_intent",
+            {
+                "setup_intent_id": intent_id,
+                "status": "unknown",
+                "customer_id": "",
+                "payment_method_id": "",
+            },
+        )
+
+    intent = stripe.SetupIntent.retrieve(intent_id)
+    payment_method_id = intent.get("payment_method") or ""
+    customer_id = intent.get("customer") or ""
+    status = intent.get("status") or ""
+    return {
+        "mode": "stripe",
+        "setup_intent_id": intent_id,
+        "status": status,
+        "customer_id": customer_id,
+        "payment_method_id": payment_method_id,
+    }
 
 @app.post("/api/payments/customer-portal")
 def open_customer_portal(payload: PortalRequest) -> dict[str, Any]:

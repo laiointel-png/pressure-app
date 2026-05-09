@@ -53,6 +53,9 @@ const state = {
   stripeCustomerId: "",
   stripeSubscriptionId: "",
   stripePaymentMethodId: "",
+  stripeSetupIntentId: "",
+  lastSetupSessionId: "",
+  paymentMandateSetup: false,
   createDraftGroupId: "",
   inviteGroupPayload: null,
 };
@@ -679,6 +682,8 @@ function showScreen(name) {
   }
   if (name === "success") syncSuccessScreen();
   if (name === "billing") maybeNotifyBillingCancel();
+  if (name === "billing") maybeNotifyBillingSetupCancel();
+  if (name === "billing") handleBillingSetupReturnFromHash();
 
   if (screen instanceof HTMLElement) screen.focus();
 
@@ -732,6 +737,65 @@ async function checkStripeHealth({ silent = false } = {}) {
         message: "Backend niet bereikbaar of endpoint faalde. UI blijft in demo mode.",
       });
     }
+  }
+}
+
+function maybeNotifyBillingSetupCancel() {
+  const { params } = parseHashRoute();
+  if (params.get("setup_cancel") !== "1") return;
+  history.replaceState(null, "", "#billing");
+  showSheet({
+    label: "Mandate",
+    title: "Payment method setup geannuleerd",
+    message: "Geen probleem. Je kunt later opnieuw starten. Zonder mandate kan de backend geen off-session miss fees verwerken.",
+  });
+}
+
+function handleBillingSetupReturnFromHash() {
+  const { screen, params } = parseHashRoute();
+  if (screen !== "billing") return false;
+  if (params.get("setup") !== "1") return false;
+  const sessionId = (params.get("session_id") || params.get("session") || "").trim();
+  if (!sessionId) return false;
+
+  state.lastSetupSessionId = sessionId;
+  persistCoreState();
+  syncPaymentModel();
+  history.replaceState(null, "", "#billing");
+  fetchSetupSessionDetails(sessionId);
+  return true;
+}
+
+async function fetchSetupSessionDetails(sessionId) {
+  if (!state.apiBase) return;
+  try {
+    const payload = await api.get(`/api/payments/checkout-session/${encodeURIComponent(sessionId)}`);
+    if (payload?.customer_id) state.stripeCustomerId = String(payload.customer_id);
+    if (payload?.setup_intent_id) state.stripeSetupIntentId = String(payload.setup_intent_id);
+    persistCoreState();
+    syncPaymentModel();
+
+    if (!state.stripeSetupIntentId) return;
+    const intent = await api.get(`/api/payments/setup-intent/${encodeURIComponent(state.stripeSetupIntentId)}`);
+    if (intent?.customer_id && !state.stripeCustomerId) state.stripeCustomerId = String(intent.customer_id);
+    if (intent?.payment_method_id) state.stripePaymentMethodId = String(intent.payment_method_id);
+    if (intent?.payment_method_id) state.paymentMandateSetup = true;
+    persistCoreState();
+    syncPaymentModel();
+
+    showSheet({
+      label: intent?.mode === "stripe" ? "Stripe" : "Demo",
+      title: "Payment method opgeslagen",
+      message: state.stripePaymentMethodId
+        ? `Payment method: ${state.stripePaymentMethodId}. Backend kan nu miss fees off-session chargen.`
+        : `SetupIntent status: ${intent?.status || "ok"}.`,
+    });
+  } catch {
+    showSheet({
+      label: "Mandate",
+      title: "Setup return onvolledig",
+      message: "We konden de setup session niet ophalen. Check backend, CORS en Stripe keys. Je kunt ook via Customer Portal een payment method toevoegen.",
+    });
   }
 }
 
@@ -923,6 +987,9 @@ function hydrateFromStorage() {
   if (stored?.stripeCustomerId) state.stripeCustomerId = String(stored.stripeCustomerId || "");
   if (stored?.stripeSubscriptionId) state.stripeSubscriptionId = String(stored.stripeSubscriptionId || "");
   if (stored?.stripePaymentMethodId) state.stripePaymentMethodId = String(stored.stripePaymentMethodId || "");
+  if (stored?.stripeSetupIntentId) state.stripeSetupIntentId = String(stored.stripeSetupIntentId || "");
+  if (stored?.lastSetupSessionId) state.lastSetupSessionId = String(stored.lastSetupSessionId || "");
+  if (stored?.paymentMandateSetup != null) state.paymentMandateSetup = Boolean(stored.paymentMandateSetup);
 
   state.user.initial = state.user.initial || initialFromName(state.user.name);
 
@@ -951,6 +1018,9 @@ function persistCoreState() {
     stripeCustomerId: state.stripeCustomerId,
     stripeSubscriptionId: state.stripeSubscriptionId,
     stripePaymentMethodId: state.stripePaymentMethodId,
+    stripeSetupIntentId: state.stripeSetupIntentId,
+    lastSetupSessionId: state.lastSetupSessionId,
+    paymentMandateSetup: state.paymentMandateSetup,
     onboardingComplete: true,
   });
 }
@@ -1614,21 +1684,40 @@ function syncPaymentModel() {
     button.setAttribute("aria-pressed", active ? "true" : "false");
   });
 
-  setText("#payment-status-pill", state.paymentSetup ? "Toestemming" : "Demo");
+  const passReady = Boolean(state.paymentSetup);
+  const mandateReady = Boolean(state.paymentMandateSetup || state.stripePaymentMethodId);
+
+  setText("#payment-status-pill", mandateReady ? "Mandate" : passReady ? "Pass" : "Demo");
   setText(
     "#setup-mandate-copy",
-    state.paymentSetup
-      ? "Demo-toestemming staat aan. In productie loopt dit via Stripe Checkout/SetupIntent."
-      : "Gebruiker moet expliciet akkoord geven voor latere fees.",
+    mandateReady
+      ? "Payment method is opgeslagen. Backend kan nu off-session miss fees verwerken."
+      : passReady
+        ? "Sla nu een payment method op (mandate) zodat miss fees later off-session kunnen."
+        : "Gebruiker moet expliciet akkoord geven voor latere fees.",
   );
 
   const portal = document.querySelector("#billing-open-portal");
-  if (portal) portal.classList.toggle("hidden", !(state.paymentSetup && state.apiBase));
+  if (portal) portal.classList.toggle("hidden", !(state.apiBase && passReady && (state.stripeCustomerId || state.user.email)));
+
+  const passRow = document.querySelector("#setup-pass-row");
+  if (passRow) {
+    passRow.classList.toggle("done", passReady);
+    passRow.classList.toggle("active", !passReady);
+  }
 
   const mandateRow = document.querySelector("#setup-mandate-row");
   if (mandateRow) {
-    mandateRow.classList.toggle("done", state.paymentSetup);
-    mandateRow.classList.toggle("active", !state.paymentSetup);
+    mandateRow.classList.toggle("done", mandateReady);
+    mandateRow.classList.toggle("active", passReady && !mandateReady);
+    mandateRow.classList.toggle("locked", !passReady);
+  }
+
+  const webhookRow = document.querySelector("#setup-webhook-row");
+  if (webhookRow) {
+    webhookRow.classList.toggle("done", mandateReady);
+    webhookRow.classList.toggle("active", mandateReady);
+    webhookRow.classList.toggle("locked", !mandateReady);
   }
 
   const customerId = document.querySelector("#stripe-customer-id");
@@ -1729,6 +1818,86 @@ async function setupPaymentPermissionLive() {
       title: "Backend niet bereikbaar",
       message: "Toestemming staat lokaal aan zodat je UI flow klopt. Stel later een API base in voor echte Stripe calls.",
     });
+  }
+}
+
+function setupMandate() {
+  setupMandateLive();
+}
+
+async function setupMandateLive() {
+  const confirm = document.querySelector("#billing-confirm");
+  const email = state.user.email || document.querySelector("#onboard-email")?.value?.trim() || "";
+  const userId = state.user.id;
+
+  if (!state.apiBase) {
+    state.paymentSetup = true;
+    state.paymentMandateSetup = true;
+    syncPaymentModel();
+    persistCoreState();
+    showSheet({
+      label: "Demo",
+      title: "Payment method (demo) opgeslagen",
+      message: "Geen backend ingesteld. In productie loopt dit via Stripe Checkout (setup mode) of SetupIntent.",
+    });
+    return;
+  }
+
+  if (confirm && !confirm.checked) {
+    showSheet({
+      label: "Bevestig",
+      title: "Bevestig Stripe setup",
+      message: "Vink eerst aan dat je begrijpt dat er een Stripe (test) setup in een nieuw tabblad kan openen.",
+      primary: "Ok",
+      onPrimary: () => {
+        if (confirm instanceof HTMLElement) confirm.focus();
+      },
+    });
+    return;
+  }
+
+  const button = document.querySelector("#setup-mandate");
+  if (button instanceof HTMLButtonElement) {
+    button.disabled = true;
+    button.textContent = "Setup laden...";
+  }
+
+  try {
+    const health = await api.get("/api/payments/health");
+    const ready = Boolean(health?.stripe_ready);
+    const session = await api.post("/api/payments/setup-session", {
+      user_id: userId,
+      email: email || "demo@example.com",
+      group_id: state.group.id,
+      stripe_customer_id: state.stripeCustomerId || "",
+      currency: "eur",
+    });
+
+    state.paymentSetup = true;
+    syncPaymentModel();
+    persistCoreState();
+
+    showSheet({
+      label: ready ? "Stripe" : "Demo backend",
+      title: "Payment method setup gestart",
+      message: `Setup URL ontvangen (${session.mode}). Na afronden keert Stripe terug naar de app en slaan we je payment method id op.`,
+      primary: "Open setup",
+      secondary: "Sluiten",
+      onPrimary: () => {
+        if (session.checkout_url) window.open(session.checkout_url, "_blank", "noopener,noreferrer");
+      },
+    });
+  } catch {
+    showSheet({
+      label: "Mandate",
+      title: "Setup failed",
+      message: "Backend endpoint is niet bereikbaar of gaf een error. Je kunt ook via Customer Portal een payment method toevoegen.",
+    });
+  } finally {
+    if (button instanceof HTMLButtonElement) {
+      button.disabled = false;
+      button.textContent = "Sla payment method op voor miss fees";
+    }
   }
 }
 
@@ -2156,6 +2325,7 @@ document.querySelector("#billing-help").addEventListener("click", () => {
 });
 document.querySelector("#billing-check-stripe")?.addEventListener("click", () => checkStripeHealth());
 document.querySelector("#setup-payment").addEventListener("click", setupPaymentPermission);
+document.querySelector("#setup-mandate")?.addEventListener("click", setupMandate);
 document.querySelector("#billing-open-portal")?.addEventListener("click", openCustomerPortal);
 document.querySelector("#simulate-miss-fee").addEventListener("click", simulateMissFee);
 document.querySelector("#charge-miss-fee")?.addEventListener("click", chargeMissFeeBackend);
@@ -2163,10 +2333,13 @@ document.querySelector("#charge-miss-fee")?.addEventListener("click", chargeMiss
 document.querySelector("#stripe-customer-id")?.addEventListener("input", (event) => {
   state.stripeCustomerId = event.target.value.trim();
   persistCoreState();
+  syncPaymentModel();
 });
 document.querySelector("#stripe-payment-method-id")?.addEventListener("input", (event) => {
   state.stripePaymentMethodId = event.target.value.trim();
+  state.paymentMandateSetup = Boolean(state.stripePaymentMethodId);
   persistCoreState();
+  syncPaymentModel();
 });
 
 document.querySelectorAll(".model-option").forEach((button) => {

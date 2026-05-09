@@ -18,7 +18,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050505'/%3E%3Cpath d='M18 42 44 16' stroke='%23ff5a00' stroke-width='9' stroke-linecap='round'/%3E%3Cpath d='M20 20h20v20H20z' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E"
     />
-	    <link rel="stylesheet" href="./styles.css?v=23" />
+	    <link rel="stylesheet" href="./styles.css?v=24" />
   </head>
   <body>
     <main class="app-shell">
@@ -736,21 +736,21 @@
 	            </div>
 	            <small class="field-hint" id="stripe-health-hint">Zet een backend API base in onboarding. Live keys zijn geblokkeerd tenzij je allow-live flags zet.</small>
 	            <div class="setup-list">
-	              <article class="setup-row done">
+	              <article class="setup-row" id="setup-pass-row">
 	                <span class="step-badge">01</span>
 	                <div>
                   <strong>Pressure Pass</strong>
                   <small>Stripe Billing abonnement voor app-toegang.</small>
                 </div>
               </article>
-              <article class="setup-row active" id="setup-mandate-row">
+              <article class="setup-row" id="setup-mandate-row">
                 <span class="step-badge">02</span>
                 <div>
                   <strong>SEPA/card toestemming</strong>
                   <small id="setup-mandate-copy">Gebruiker moet expliciet akkoord geven voor latere fees.</small>
                 </div>
               </article>
-              <article class="setup-row">
+              <article class="setup-row" id="setup-webhook-row">
                 <span class="step-badge">03</span>
                 <div>
                   <strong>Webhook bij miss</strong>
@@ -784,6 +784,7 @@
 	              </label>
 	            </div>
 	            <button class="primary-button full-width" id="setup-payment" type="button">Start Pressure Pass checkout</button>
+              <button class="secondary-button full-width" id="setup-mandate" type="button">Sla payment method op voor miss fees</button>
             <button class="secondary-button full-width hidden" id="billing-open-portal" type="button">Beheer abonnement (Stripe)</button>
             <small class="field-hint" id="billing-confirm-hint">Zonder backend blijft dit demo-only. Met backend + sk_test_ start je een echte test checkout.</small>
           </section>
@@ -972,6 +973,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=23"></script>
+    <script src="./script.js?v=24"></script>
   </body>
 </html>

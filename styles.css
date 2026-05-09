@@ -1084,6 +1084,11 @@ svg {
   background: var(--orange-soft);
 }
 
+.setup-row.locked {
+  border-style: dashed;
+  opacity: 0.78;
+}
+
 .ledger-list article {
   grid-template-columns: minmax(0, 64px) minmax(0, 1fr) auto;
 }
