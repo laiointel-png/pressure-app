@@ -1835,7 +1835,7 @@ async function syncGroupsFromBackend({ silent = false } = {}) {
       title: "Geen API base ingesteld",
       message: "Zet een backend URL in onboarding om groups te syncen met `/api/groups`.",
     });
-    return;
+    return 0;
   }
 
   try {
@@ -1867,6 +1867,7 @@ async function syncGroupsFromBackend({ silent = false } = {}) {
         message: `Backend groups geladen: ${next.length}.`,
       });
     }
+    return next.length;
   } catch {
     setGroupSyncStatus("bad", "Error");
     if (!silent) {
@@ -1876,7 +1877,42 @@ async function syncGroupsFromBackend({ silent = false } = {}) {
         message: "Backend niet bereikbaar of CORS blokkeert `/api/groups`. Local storage blijft leidend.",
       });
     }
+    return 0;
   }
+}
+
+async function pushLocalGroupsToBackend({ silent = false } = {}) {
+  if (!state.apiBase) {
+    if (silent) return { uploaded: 0, failed: 0 };
+    showSheet({
+      label: "Sync",
+      title: "Geen API base ingesteld",
+      message: "Zet in onboarding een backend URL om local groups te uploaden naar `/api/groups`.",
+    });
+    return { uploaded: 0, failed: 0 };
+  }
+
+  const groups = sortedGroups();
+  if (!groups.length) return { uploaded: 0, failed: 0 };
+
+  let uploaded = 0;
+  let failed = 0;
+  for (const group of groups) {
+    // best-effort; any failures remain local-only
+    const ok = await saveGroupToBackend(group, { silent: true });
+    if (ok) uploaded += 1;
+    else failed += 1;
+  }
+
+  if (!silent) {
+    showSheet({
+      label: "Sync",
+      title: "Local groups geüpload",
+      message: `Uploaded ${uploaded}. Failed ${failed}.`,
+    });
+  }
+
+  return { uploaded, failed };
 }
 
 function updateInvitePreview() {
@@ -2105,8 +2141,16 @@ document.querySelector("#group-edit-current")?.addEventListener("click", () => {
   document.querySelector("#group-name-input")?.focus();
 });
 document.querySelector("#group-sync")?.addEventListener("click", async () => {
-  await syncGroupsFromBackend({ silent: true });
-  await syncCheckinsFromBackend({ silent: false });
+  const pushed = await pushLocalGroupsToBackend({ silent: true });
+  const pulled = await syncGroupsFromBackend({ silent: true });
+  await syncCheckinsFromBackend({ silent: true });
+  showSheet({
+    label: "Sync",
+    title: "Sync afgerond",
+    message: state.apiBase
+      ? `Uploaded ${pushed.uploaded} (${pushed.failed} failed). Loaded ${pulled} backend groups.`
+      : "Geen API base ingesteld. Local groups blijven leidend.",
+  });
 });
 
 document.querySelectorAll("#group-name-input, #deadline-input, #fee-input, #destination-input").forEach((field) => {
@@ -2296,6 +2340,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
     syncUserUI();
     syncPaymentModel();
     if (state.onboardingGroupMode === "create") saveGroupToBackend(state.group, { silent: true });
+    if (state.apiBase) pushLocalGroupsToBackend({ silent: true });
     updateHome();
     updateCamera();
     showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
@@ -2376,6 +2421,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
   syncUserUI();
   syncPaymentModel();
   saveGroupToBackend(state.group, { silent: true });
+  pushLocalGroupsToBackend({ silent: true });
   updateHome();
   updateCamera();
   showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
