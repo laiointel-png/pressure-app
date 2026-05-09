@@ -18,7 +18,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050505'/%3E%3Cpath d='M18 42 44 16' stroke='%23ff5a00' stroke-width='9' stroke-linecap='round'/%3E%3Cpath d='M20 20h20v20H20z' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E"
     />
-	    <link rel="stylesheet" href="./styles.css?v=21" />
+	    <link rel="stylesheet" href="./styles.css?v=22" />
   </head>
   <body>
     <main class="app-shell">
@@ -427,6 +427,29 @@
             <div class="group-selector-list" id="group-selector-list" role="list"></div>
             <button class="secondary-button full-width" id="group-edit-current" type="button">Bewerk huidige groep</button>
             <button class="secondary-button full-width" id="group-selector-new" type="button">Maak nieuwe groep</button>
+          </section>
+
+          <section class="content-card" aria-labelledby="group-backup-title">
+            <div class="section-title">
+              <span class="section-label">Backup</span>
+              <h2 id="group-backup-title">Bewaar of herstel je groepen</h2>
+            </div>
+            <p class="muted">
+              Exporteer je lokale groepen als JSON (handig voor team setup of als backup). Import merge’t groepen en laat local storage leidend.
+            </p>
+            <button class="secondary-button full-width" id="export-groups" type="button">Export groepen (JSON)</button>
+            <div class="form-row">
+              <input
+                id="import-groups-file"
+                type="file"
+                accept="application/json"
+                aria-label="Import groepen JSON"
+                aria-describedby="import-groups-hint"
+                class="file-input"
+              />
+              <button class="secondary-button" id="import-groups" type="button">Import</button>
+            </div>
+            <small class="field-hint" id="import-groups-hint">Import voegt groepen toe (op id) en zet de actieve groep indien meegeleverd.</small>
           </section>
         </section>
 
@@ -938,6 +961,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=21"></script>
+    <script src="./script.js?v=22"></script>
   </body>
 </html>

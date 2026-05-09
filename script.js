@@ -1915,6 +1915,103 @@ async function pushLocalGroupsToBackend({ silent = false } = {}) {
   return { uploaded, failed };
 }
 
+function normalizeImportedGroup(raw) {
+  if (!raw) return null;
+  const id = String(raw.id || raw.group_id || "").trim();
+  if (!id) return null;
+  const name = String(raw.name || "Nieuwe groep").trim() || "Nieuwe groep";
+  const deadline = String(raw.deadline || "22:00").trim() || "22:00";
+  const feeLabel = String(raw.feeLabel || raw.fee_label || "EUR 10").trim() || "EUR 10";
+  const destinationLabel = String(raw.destinationLabel || raw.destination_label || "Platform fee, geen cash-out").trim()
+    || "Platform fee, geen cash-out";
+  return { id, name, deadline, feeLabel, destinationLabel };
+}
+
+function buildGroupsExportPayload() {
+  return {
+    version: 1,
+    kind: "pressure_groups_export",
+    exportedAt: new Date().toISOString(),
+    user: {
+      id: state.user.id,
+      name: state.user.name,
+      email: state.user.email,
+      initial: state.user.initial,
+    },
+    activeGroupId: state.activeGroupId,
+    groups: sortedGroups().map((group) => ({
+      id: group.id,
+      name: group.name,
+      deadline: group.deadline,
+      feeLabel: group.feeLabel,
+      destinationLabel: group.destinationLabel,
+    })),
+  };
+}
+
+function downloadJsonFile(payload, filename) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportGroupsJson() {
+  const payload = buildGroupsExportPayload();
+  const today = new Date().toISOString().slice(0, 10);
+  downloadJsonFile(payload, `pressure-groups-${today}.json`);
+  showSheet({
+    label: "Backup",
+    title: "Export klaar",
+    message: `Je export bevat ${payload.groups.length} groepen.`,
+  });
+}
+
+async function importGroupsJsonFromFile(file) {
+  const text = await file.text();
+  const raw = JSON.parse(text);
+
+  const importedGroups = Array.isArray(raw?.groups) ? raw.groups : raw?.groups && typeof raw.groups === "object" ? Object.values(raw.groups) : [];
+  const normalized = importedGroups.map(normalizeImportedGroup).filter(Boolean);
+
+  let imported = 0;
+  for (const group of normalized) {
+    upsertGroup(group);
+    imported += 1;
+  }
+
+  const nextActive = String(raw?.activeGroupId || "").trim();
+  if (nextActive && state.groups[nextActive]) {
+    state.activeGroupId = nextActive;
+    state.group = { ...state.group, ...state.groups[nextActive], id: nextActive };
+  } else if (!state.activeGroupId && normalized[0]?.id) {
+    state.activeGroupId = normalized[0].id;
+    state.group = { ...state.group, ...state.groups[state.activeGroupId], id: state.activeGroupId };
+  }
+
+  persistCoreState();
+  renderGroupSelector();
+  syncGroupUI();
+  syncGroupSyncPill();
+  updateInvitePreview();
+  updateHome();
+  updateCamera();
+
+  if (state.apiBase) pushLocalGroupsToBackend({ silent: true });
+
+  showSheet({
+    label: "Backup",
+    title: "Import afgerond",
+    message: imported ? `Geïmporteerd: ${imported}.` : "Geen geldige groepen gevonden in dit bestand.",
+  });
+}
+
 function updateInvitePreview() {
   const name = document.querySelector("#group-name-input")?.value || state.group.name || "Nieuwe groep";
   const deadline = document.querySelector("#deadline-input")?.value || state.group.deadline || "22:00";
@@ -2124,6 +2221,28 @@ document.querySelectorAll("#invite-link-input, #group-invite-link-input").forEac
   input.addEventListener("click", () => {
     if (input instanceof HTMLInputElement) input.select();
   });
+});
+
+document.querySelector("#export-groups")?.addEventListener("click", exportGroupsJson);
+document.querySelector("#import-groups")?.addEventListener("click", () => {
+  const input = document.querySelector("#import-groups-file");
+  if (input instanceof HTMLInputElement) input.click();
+});
+document.querySelector("#import-groups-file")?.addEventListener("change", async (event) => {
+  const input = event.target;
+  const file = input?.files?.[0];
+  if (!file) return;
+  try {
+    await importGroupsJsonFromFile(file);
+  } catch {
+    showSheet({
+      label: "Backup",
+      title: "Import mislukt",
+      message: "Dit bestand is geen geldige Pressure export JSON.",
+    });
+  } finally {
+    if (input instanceof HTMLInputElement) input.value = "";
+  }
 });
 
 document.querySelector("#group-selector-new")?.addEventListener("click", () => {
