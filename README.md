@@ -63,7 +63,7 @@ Backend sketch: `backend/payment_api_example.py` has the Stripe endpoints for Ch
 
 ## Backend (optional)
 
-For wiring the frontend to real endpoints (Stripe demo/real + group persistence), run the unified API server:
+For wiring the frontend to real endpoints (Stripe demo/real + group + member persistence), run the unified API server:
 
 ```bash
 .venv/bin/python -m pip install fastapi uvicorn stripe

@@ -31,6 +31,7 @@ except Exception:  # pragma: no cover - optional for prototype.
 DATA_DIR = Path(__file__).resolve().parent / "data"
 GROUPS_PATH = DATA_DIR / "groups.json"
 CHECKINS_PATH = DATA_DIR / "checkins.json"
+MEMBERS_PATH = DATA_DIR / "members.json"
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -68,6 +69,7 @@ def health() -> dict[str, Any]:
         "ok": True,
         "features": {
             "groups": True,
+            "members": True,
             "payments": payments_app is not None,
         },
     }
@@ -156,6 +158,36 @@ def upsert_checkin(payload: CheckinPayload) -> dict[str, Any]:
     day_bucket[payload.user_id] = record
     _write_json(CHECKINS_PATH, checkins)
     return {"checkin": record}
+
+
+class MemberPayload(BaseModel):
+    group_id: str
+    user_id: str
+    display_name: str = "Lid"
+    initial: str = "Y"
+
+
+@app.get("/api/members/{group_id}")
+def list_members(group_id: str) -> dict[str, Any]:
+    members = _read_json(MEMBERS_PATH, default={})
+    group_bucket = members.get(group_id, {})
+    users = list(group_bucket.values()) if isinstance(group_bucket, dict) else []
+    return {"group_id": group_id, "members": users}
+
+
+@app.post("/api/members")
+def upsert_member(payload: MemberPayload) -> dict[str, Any]:
+    members = _read_json(MEMBERS_PATH, default={})
+    group_bucket = members.setdefault(payload.group_id, {})
+    record = {
+        "group_id": payload.group_id,
+        "user_id": payload.user_id,
+        "display_name": payload.display_name,
+        "initial": payload.initial,
+    }
+    group_bucket[payload.user_id] = record
+    _write_json(MEMBERS_PATH, members)
+    return {"member": record}
 
 
 if payments_app is not None:

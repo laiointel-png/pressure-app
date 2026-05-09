@@ -18,6 +18,7 @@ const state = {
     initial: "Y",
   },
   groups: {},
+  membersByGroup: {},
   activeGroupId: "",
   group: {
     id: "group_demo",
@@ -127,11 +128,60 @@ function upsertGroup(group) {
   state.groups[group.id] = { ...(state.groups[group.id] || {}), ...group };
 }
 
+function normalizeStoredMembers(value) {
+  if (!value || typeof value !== "object") return {};
+  const next = {};
+  Object.entries(value).forEach(([groupId, members]) => {
+    if (!groupId) return;
+    if (!members || typeof members !== "object") return;
+    next[groupId] = { ...members };
+  });
+  return next;
+}
+
+function normalizeMember(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const userId = String(raw.userId || raw.user_id || "").trim();
+  const groupId = String(raw.groupId || raw.group_id || "").trim();
+  if (!userId || !groupId) return null;
+  const displayName = String(raw.displayName || raw.display_name || "Lid").trim() || "Lid";
+  const initial = String(raw.initial || initialFromName(displayName) || "Y").trim() || "Y";
+  return { groupId, userId, displayName, initial };
+}
+
+function upsertMemberLocal(member) {
+  const normalized = normalizeMember(member);
+  if (!normalized) return;
+  const bucket = (state.membersByGroup[normalized.groupId] ||= {});
+  bucket[normalized.userId] = { ...(bucket[normalized.userId] || {}), ...normalized };
+}
+
+function currentGroupMembers() {
+  const bucket = state.membersByGroup?.[state.group.id];
+  if (!bucket || typeof bucket !== "object") return [];
+  return Object.values(bucket).filter((member) => member?.userId);
+}
+
+function ensureSelfMemberLocal() {
+  upsertMemberLocal({
+    groupId: state.group.id,
+    userId: state.user.id,
+    displayName: state.user.name || "Jij",
+    initial: state.user.initial || initialFromName(state.user.name) || "Y",
+  });
+  const roster = currentGroupMembers();
+  if (roster.length) {
+    state.group.membersCount = roster.length;
+    upsertGroup(state.group);
+  }
+}
+
 function setActiveGroup(groupId, { announce = true } = {}) {
   const next = state.groups[groupId];
   if (!next) return;
   state.group = { ...state.group, ...next, id: groupId };
   state.activeGroupId = groupId;
+  ensureSelfMemberLocal();
   persistCoreState();
   syncGroupUI();
   updateInvitePreview();
@@ -964,6 +1014,7 @@ function hydrateFromStorage() {
 
   if (stored?.user) state.user = { ...state.user, ...stored.user };
   state.groups = normalizeStoredGroups(stored?.groups);
+  state.membersByGroup = normalizeStoredMembers(stored?.membersByGroup);
   if (stored?.onboardingGroupMode) state.onboardingGroupMode = stored.onboardingGroupMode;
   if (stored?.group) {
     const legacyGroup = normalizeBackendGroup(stored.group) || stored.group;
@@ -998,6 +1049,7 @@ function hydrateFromStorage() {
 
   ensureIds();
   upsertGroup(state.group);
+  ensureSelfMemberLocal();
   syncGroupSyncPill();
 }
 
@@ -1005,6 +1057,7 @@ function persistCoreState() {
   saveModel({
     user: state.user,
     groups: state.groups,
+    membersByGroup: state.membersByGroup,
     activeGroupId: state.activeGroupId,
     group: state.group,
     paymentSetup: state.paymentSetup,
@@ -1051,10 +1104,25 @@ function memberSubtitle(member) {
 }
 
 function buildRoster(checkins = []) {
-  const base = [
-    ...demoRoster.map((member) => ({ ...member })),
-    { userId: state.user.id, displayName: state.user.name || "Jij", initial: state.user.initial || "Y", checksCompleted: state.todayChecks },
-  ];
+  const localMembers = currentGroupMembers();
+  const baseMembers = localMembers.length
+    ? localMembers.map((member) => ({
+        userId: member.userId,
+        displayName: member.displayName,
+        initial: member.initial,
+        checksCompleted: member.userId === state.user.id ? state.todayChecks : 0,
+      }))
+    : demoRoster.map((member) => ({ ...member }));
+
+  const base = [...baseMembers];
+  if (!base.some((member) => member.userId === state.user.id)) {
+    base.unshift({
+      userId: state.user.id,
+      displayName: state.user.name || "Jij",
+      initial: state.user.initial || "Y",
+      checksCompleted: state.todayChecks,
+    });
+  }
 
   const byId = new Map(base.map((member) => [member.userId, member]));
   checkins.forEach((raw) => {
@@ -1135,6 +1203,62 @@ async function upsertCheckinToBackend({ silent = true } = {}) {
       });
     }
     return false;
+  }
+}
+
+async function upsertMemberToBackend(member, { silent = true } = {}) {
+  if (!state.apiBase) return false;
+  const normalized = normalizeMember(member);
+  if (!normalized) return false;
+  try {
+    await api.post("/api/members", {
+      group_id: normalized.groupId,
+      user_id: normalized.userId,
+      display_name: normalized.displayName,
+      initial: normalized.initial,
+    });
+    state.lastBackendGroupSaveAt = Date.now();
+    persistCoreState();
+    syncGroupSyncPill();
+    return true;
+  } catch {
+    if (!silent) {
+      showSheet({
+        label: "Backend",
+        title: "Member save failed",
+        message: "Backend endpoint is niet bereikbaar of gaf een error. Local roster blijft leidend.",
+      });
+    }
+    return false;
+  }
+}
+
+async function syncMembersFromBackend({ silent = true } = {}) {
+  if (!state.apiBase) return [];
+  try {
+    const payload = await api.get(`/api/members/${encodeURIComponent(state.group.id)}`);
+    const members = Array.isArray(payload?.members) ? payload.members : [];
+    members.map(normalizeMember).filter(Boolean).forEach(upsertMemberLocal);
+
+    const roster = currentGroupMembers();
+    if (roster.length) {
+      state.group.membersCount = roster.length;
+      upsertGroup(state.group);
+    }
+    state.lastBackendSyncAt = Date.now();
+    persistCoreState();
+    syncGroupUI();
+    syncGroupSyncPill();
+    return members;
+  } catch {
+    if (!silent) {
+      showSheet({
+        label: "Sync",
+        title: "Members sync mislukt",
+        message: "Backend niet bereikbaar of CORS blokkeert `/api/members/...`. Local roster blijft leidend.",
+      });
+    }
+    return [];
   }
 }
 
@@ -2382,11 +2506,22 @@ document.querySelector("#create-group-form").addEventListener("submit", async (e
     destinationLabel,
   };
   upsertGroup(state.group);
+  ensureSelfMemberLocal();
   syncGroupUI();
   persistCoreState();
 
   if (state.apiBase) {
     await saveGroupToBackend(state.group, { silent: true });
+    await upsertMemberToBackend(
+      {
+        groupId: state.group.id,
+        userId: state.user.id,
+        displayName: state.user.name || "Jij",
+        initial: state.user.initial || "Y",
+      },
+      { silent: true },
+    );
+    await syncMembersFromBackend({ silent: true });
   }
   syncGroupSyncPill();
 
@@ -2448,6 +2583,7 @@ document.querySelector("#group-edit-current")?.addEventListener("click", () => {
 document.querySelector("#group-sync")?.addEventListener("click", async () => {
   const pushed = await pushLocalGroupsToBackend({ silent: true });
   const pulled = await syncGroupsFromBackend({ silent: true });
+  await syncMembersFromBackend({ silent: true });
   await syncCheckinsFromBackend({ silent: true });
   showSheet({
     label: "Sync",
@@ -2638,13 +2774,26 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
 
   ensureIds();
 
-  const finalize = () => {
+  const finalize = async () => {
     upsertGroup(state.group);
+    ensureSelfMemberLocal();
     persistCoreState();
     syncGroupUI();
     syncUserUI();
     syncPaymentModel();
     if (state.onboardingGroupMode === "create") saveGroupToBackend(state.group, { silent: true });
+    if (state.apiBase) {
+      await upsertMemberToBackend(
+        {
+          groupId: state.group.id,
+          userId: state.user.id,
+          displayName: state.user.name || "Jij",
+          initial: state.user.initial || "Y",
+        },
+        { silent: true },
+      );
+      await syncMembersFromBackend({ silent: true });
+    }
     if (state.apiBase) pushLocalGroupsToBackend({ silent: true });
     if (state.apiBase) {
       testApiConnection(state.apiBase, { silent: true });
@@ -2761,6 +2910,7 @@ window.addEventListener("hashchange", () => {
 async function bootstrapBackendSync() {
   if (!state.apiBase) return;
   await syncGroupsFromBackend({ silent: true });
+  await syncMembersFromBackend({ silent: true });
   await syncCheckinsFromBackend({ silent: true });
 }
 
