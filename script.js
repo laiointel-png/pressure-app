@@ -1615,7 +1615,7 @@ async function startVision() {
   }
 }
 
-function acceptCurrentExercise() {
+async function acceptCurrentExercise() {
   const current = currentExercise();
   addFeedItem(`${current.title} geaccepteerd`, `Trust score ${state.trust}%`, "good");
 
@@ -1629,8 +1629,12 @@ function acceptCurrentExercise() {
     setText("#motion-score", "Actief");
     updateHome();
     updateCamera();
-    upsertCheckinToBackend({ silent: true });
-    renderMemberList([]);
+    await upsertCheckinToBackend({ silent: true });
+    if (state.apiBase) {
+      await syncCheckinsFromBackend({ silent: true });
+    } else {
+      renderMemberList([]);
+    }
     showSheet({
       label: "Check klaar",
       title: `${current.title} telt mee`,
@@ -1651,7 +1655,8 @@ function acceptCurrentExercise() {
   addFeedItem("Jij hebt 4/4 gehaald", "Workout telt vandaag", "good");
   updateHome();
   updateCamera();
-  upsertCheckinToBackend({ silent: true });
+  await upsertCheckinToBackend({ silent: true });
+  if (state.apiBase) await syncCheckinsFromBackend({ silent: true });
   state.successKind = "workout";
   showScreen("success");
 }
@@ -2753,14 +2758,15 @@ window.addEventListener("hashchange", () => {
   showScreen("home");
 });
 
+async function bootstrapBackendSync() {
+  if (!state.apiBase) return;
+  await syncGroupsFromBackend({ silent: true });
+  await syncCheckinsFromBackend({ silent: true });
+}
+
 hydrateFromStorage();
 const invite = consumeJoinInviteFromUrl();
 if (invite) state.pendingInvite = invite;
-if (state.apiBase) {
-  // Best-effort merge backend groups without interrupting the demo UX.
-  syncGroupsFromBackend({ silent: true });
-  syncCheckinsFromBackend({ silent: true });
-}
 renderGroupSelector();
 syncGroupUI();
 syncUserUI();
@@ -2769,6 +2775,7 @@ renderMemberList([]);
 updateInvitePreview();
 updateHome();
 updateCamera();
+bootstrapBackendSync();
 
 const stored = loadModel();
 const { screen: initialScreen } = parseHashRoute();
