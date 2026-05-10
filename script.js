@@ -2696,8 +2696,13 @@ async function pushLocalGroupsToBackend({ silent = false } = {}) {
   for (const group of groups) {
     // best-effort; any failures remain local-only
     const ok = await saveGroupToBackend(group, { silent: true });
-    if (ok) uploaded += 1;
-    else failed += 1;
+    if (ok) {
+      uploaded += 1;
+      const hasJoinCode = Boolean(String(group?.joinCode || group?.join_code || "").trim());
+      if (!hasJoinCode) await ensureInviteCodeFromBackend(group.id, { silent: true });
+    } else {
+      failed += 1;
+    }
   }
 
   if (!silent) {
@@ -3007,6 +3012,7 @@ document.querySelector("#create-group-form").addEventListener("submit", async (e
 
   if (state.apiBase) {
     await saveGroupToBackend(state.group, { silent: true });
+    await ensureInviteCodeFromBackend(state.group.id, { silent: true });
     await upsertMemberToBackend(
       {
         groupId: state.group.id,
