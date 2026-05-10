@@ -2014,6 +2014,12 @@ function syncPaymentModel() {
     passRow.classList.toggle("active", !passReady);
   }
 
+  const mandateButton = document.querySelector("#setup-mandate");
+  if (mandateButton instanceof HTMLButtonElement) {
+    mandateButton.disabled = !passReady;
+    mandateButton.setAttribute("aria-disabled", mandateButton.disabled ? "true" : "false");
+  }
+
   const mandateRow = document.querySelector("#setup-mandate-row");
   if (mandateRow) {
     mandateRow.classList.toggle("done", mandateReady);
@@ -2026,6 +2032,18 @@ function syncPaymentModel() {
     webhookRow.classList.toggle("done", mandateReady);
     webhookRow.classList.toggle("active", mandateReady);
     webhookRow.classList.toggle("locked", !mandateReady);
+  }
+
+  const chargeButton = document.querySelector("#charge-miss-fee");
+  if (chargeButton instanceof HTMLButtonElement) {
+    chargeButton.disabled = !(state.apiBase && mandateReady);
+    chargeButton.setAttribute("aria-disabled", chargeButton.disabled ? "true" : "false");
+  }
+
+  const settleButton = document.querySelector("#settle-day");
+  if (settleButton instanceof HTMLButtonElement) {
+    settleButton.disabled = Boolean(state.apiBase && !mandateReady);
+    settleButton.setAttribute("aria-disabled", settleButton.disabled ? "true" : "false");
   }
 
   const customerId = document.querySelector("#stripe-customer-id");
@@ -3080,7 +3098,7 @@ async function previewJoinGroup() {
     showSheet({
       label: "Join",
       title: "Vul een group code in",
-      message: "De code ziet eruit als `group_...` en komt uit de group owner setup.",
+      message: "Gebruik een invite code (`code_...`) of een group id (`group_...`).",
     });
     if (codeField instanceof HTMLElement) codeField.focus();
     return;
@@ -3116,8 +3134,11 @@ async function previewJoinGroup() {
   localStorage.setItem(API_BASE_KEY, apiBase);
 
   try {
-    const payload = await api.get(`/api/groups/${encodeURIComponent(groupCode)}`);
-    const group = normalizeBackendGroup(payload?.group);
+    const payload = await api
+      .get(`/api/invites/${encodeURIComponent(groupCode)}`)
+      .then((response) => response?.group || response)
+      .catch(() => api.get(`/api/groups/${encodeURIComponent(groupCode)}`).then((response) => response?.group || response));
+    const group = normalizeBackendGroup(payload);
     if (!group) throw new Error("group_invalid");
 
     showSheet({
@@ -3135,7 +3156,7 @@ async function previewJoinGroup() {
     showSheet({
       label: "Join",
       title: "Group niet gevonden",
-      message: "Controleer de code, of je backend draait en CORS toelaat.",
+      message: "Controleer of je invite code / group id klopt en of je backend draait met CORS aan.",
     });
   }
 }
@@ -3241,7 +3262,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
       showSheet({
         label: "Join",
         title: "Vul een group code in",
-        message: "De code ziet eruit als `group_...` en komt uit de group owner setup.",
+        message: "Gebruik een invite code (`code_...`) of een group id (`group_...`).",
       });
       document.querySelector("#onboard-group-code")?.focus();
       return;
