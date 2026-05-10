@@ -31,6 +31,8 @@ jobs:
           cp -v index.html script.js styles.css .nojekyll _site/
           if [ -d assets ]; then cp -Rv assets _site/assets; fi
           if [ -d docs ]; then cp -Rv docs _site/docs; fi
+          SHA="${GITHUB_SHA::7}"
+          perl -pi -e "s/(styles\\.css)\\?v=[^\\\"']+/$1?v=${SHA}/g; s/(script\\.js)\\?v=[^\\\"']+/$1?v=${SHA}/g" _site/index.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

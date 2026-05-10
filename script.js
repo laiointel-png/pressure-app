@@ -58,6 +58,7 @@ const state = {
   lastSetupSessionId: "",
   paymentMandateSetup: false,
   createDraftGroupId: "",
+  createDraftJoinCode: "",
   inviteGroupPayload: null,
 };
 
@@ -163,6 +164,27 @@ function newId(prefix) {
     globalThis.crypto?.randomUUID?.bind(globalThis.crypto) ||
     (() => `${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`);
   return `${prefix}_${uuid()}`;
+}
+
+function localJoinCodeFromGroupId(groupId) {
+  const raw = String(groupId || "").trim();
+  if (!raw) return "";
+  const normalized = raw.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const tail = normalized.slice(-6) || Math.random().toString(16).slice(2, 8);
+  return `code_local_${tail.padStart(6, "0")}`;
+}
+
+function ensureLocalJoinCodeForGroupId(groupId) {
+  const id = String(groupId || "").trim();
+  if (!id) return "";
+  const existing = String(state.groups?.[id]?.joinCode || state.groups?.[id]?.join_code || "").trim();
+  if (existing && existing !== id) return existing;
+  const joinCode = localJoinCodeFromGroupId(id);
+  if (!joinCode) return "";
+  state.groups[id] = { ...(state.groups[id] || {}), joinCode };
+  if (state.group?.id === id) state.group = { ...state.group, joinCode };
+  persistCoreState();
+  return joinCode;
 }
 
 function normalizeStoredGroups(value) {
@@ -408,8 +430,14 @@ function currentInviteGroupId() {
 function currentInviteJoinCode() {
   const groupId = currentInviteGroupId();
   if (!groupId) return "";
+  const creatingNew = Boolean(document.querySelector("#create-new-toggle")?.checked);
+  if (creatingNew && state.createDraftGroupId === groupId) {
+    return state.createDraftJoinCode || localJoinCodeFromGroupId(groupId) || groupId;
+  }
   const joinCode = String(state.groups?.[groupId]?.joinCode || state.groups?.[groupId]?.join_code || "").trim();
-  return joinCode || groupId;
+  if (joinCode) return joinCode;
+  if (!state.apiBase) return ensureLocalJoinCodeForGroupId(groupId) || groupId;
+  return groupId;
 }
 
 function syncInviteLinkUI() {
@@ -432,6 +460,9 @@ async function copyCurrentInviteLink() {
   if (state.apiBase && groupId && joinCode === groupId) {
     const created = await ensureInviteCodeFromBackend(groupId, { silent: true });
     if (created) joinCode = created;
+  }
+  if (!state.apiBase && groupId && joinCode === groupId) {
+    joinCode = ensureLocalJoinCodeForGroupId(groupId) || joinCode;
   }
   const link = groupId ? buildJoinInviteLink({ groupId, joinCode, apiBase: state.apiBase }) : "";
   if (!link) return;
@@ -740,6 +771,39 @@ function setText(selector, text) {
   if (element) element.textContent = text;
 }
 
+function isSheetOpen() {
+  const sheet = document.querySelector("#action-sheet");
+  return Boolean(sheet?.classList.contains("open"));
+}
+
+function setSheetBackdropState(open) {
+  document.querySelectorAll(".screen, .bottom-nav").forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    if (node.id === "action-sheet") return;
+    if (open) {
+      node.setAttribute("inert", "");
+      node.setAttribute("aria-hidden", "true");
+    } else {
+      node.removeAttribute("inert");
+      node.removeAttribute("aria-hidden");
+    }
+  });
+}
+
+function sheetFocusableElements(sheet) {
+  if (!(sheet instanceof HTMLElement)) return [];
+  const nodes = Array.from(
+    sheet.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])'),
+  );
+  return nodes.filter((node) => {
+    if (!(node instanceof HTMLElement)) return false;
+    if (node.closest("[aria-hidden='true']")) return false;
+    if (node instanceof HTMLButtonElement) return !node.disabled;
+    if (node instanceof HTMLInputElement) return !node.disabled;
+    return !node.hasAttribute("disabled");
+  });
+}
+
 function showSheet({
   label = "Update",
   title,
@@ -762,6 +826,7 @@ function showSheet({
   setText("#sheet-secondary", secondary);
   sheet.classList.add("open");
   sheet.setAttribute("aria-hidden", "false");
+  setSheetBackdropState(true);
   setLiveStatus(title);
 
   const primaryButton = document.querySelector("#sheet-primary");
@@ -773,6 +838,7 @@ function closeSheet() {
   if (!sheet) return;
   sheet.classList.remove("open");
   sheet.setAttribute("aria-hidden", "true");
+  setSheetBackdropState(false);
   state.sheetAction = null;
   state.sheetSecondaryAction = null;
   if (state.sheetLastFocus instanceof HTMLElement) state.sheetLastFocus.focus();
@@ -872,7 +938,8 @@ function syncNav(activeName) {
     const target = button.dataset.screenTarget;
     const active = target === activeName || (button.id === "nav-verify" && activeName === "camera");
     button.classList.toggle("active", active && button.id !== "nav-verify");
-    button.setAttribute("aria-current", active ? "page" : "false");
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
   });
 }
 
@@ -1666,7 +1733,13 @@ function syncCreateScreenUI() {
   const creatingNew = Boolean(createNewToggle?.checked);
 
   if (creatingNew && !state.createDraftGroupId) state.createDraftGroupId = newId("group");
-  if (!creatingNew) state.createDraftGroupId = "";
+  if (creatingNew && !state.createDraftJoinCode && state.createDraftGroupId) {
+    state.createDraftJoinCode = localJoinCodeFromGroupId(state.createDraftGroupId);
+  }
+  if (!creatingNew) {
+    state.createDraftGroupId = "";
+    state.createDraftJoinCode = "";
+  }
 
   if (title) title.textContent = creatingNew ? "Groep maken" : "Groep bewerken";
   if (label) label.textContent = creatingNew ? "Nieuwe groep" : "Bewerk groep";
@@ -3012,9 +3085,11 @@ document.querySelector("#create-group-form").addEventListener("submit", async (e
 
   if (createNew) {
     const nextId = state.createDraftGroupId || newId("group");
-    state.group = { ...state.group, id: nextId };
+    const joinCode = state.apiBase ? "" : state.createDraftJoinCode || localJoinCodeFromGroupId(nextId);
+    state.group = { ...state.group, id: nextId, joinCode };
     state.activeGroupId = state.group.id;
     state.createDraftGroupId = "";
+    state.createDraftJoinCode = "";
   }
 
   state.group = {
@@ -3024,6 +3099,9 @@ document.querySelector("#create-group-form").addEventListener("submit", async (e
     feeLabel,
     destinationLabel,
   };
+  if (!state.apiBase && !String(state.group.joinCode || "").trim()) {
+    state.group.joinCode = localJoinCodeFromGroupId(state.group.id);
+  }
   upsertGroup(state.group);
   ensureSelfMemberLocal();
   syncGroupUI();
@@ -3150,7 +3228,38 @@ document.querySelector("#action-sheet").addEventListener("click", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeSheet();
+  if (!isSheetOpen()) {
+    if (event.key === "Escape") closeSheet();
+    return;
+  }
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeSheet();
+    return;
+  }
+
+  if (event.key !== "Tab") return;
+  const sheet = document.querySelector("#action-sheet");
+  const focusable = sheetFocusableElements(sheet);
+  if (!focusable.length) return;
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+
+  if (event.shiftKey) {
+    if (active === first || !sheet.contains(active)) {
+      event.preventDefault();
+      last.focus();
+    }
+    return;
+  }
+
+  if (active === last) {
+    event.preventDefault();
+    first.focus();
+  }
 });
 
 document.querySelector("#onboard-back")?.addEventListener("click", () => {
@@ -3308,6 +3417,9 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
   ensureIds();
 
   const finalize = async () => {
+    if (state.onboardingGroupMode === "create" && !state.apiBase && !String(state.group.joinCode || "").trim()) {
+      state.group.joinCode = localJoinCodeFromGroupId(state.group.id);
+    }
     upsertGroup(state.group);
     ensureSelfMemberLocal();
     persistCoreState();
