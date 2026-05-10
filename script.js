@@ -187,6 +187,14 @@ function ensureLocalJoinCodeForGroupId(groupId) {
   return joinCode;
 }
 
+function findLocalGroupByCode(rawCode) {
+  const code = String(rawCode || "").trim();
+  if (!code) return null;
+  if (state.groups?.[code]) return state.groups[code];
+  const groups = Object.values(state.groups || {});
+  return groups.find((group) => String(group?.joinCode || group?.join_code || "").trim() === code) || null;
+}
+
 function normalizeStoredGroups(value) {
   if (!value) return {};
   if (Array.isArray(value)) {
@@ -1281,6 +1289,8 @@ function hydrateFromStorage() {
   if (stored?.stripeSetupIntentId) state.stripeSetupIntentId = String(stored.stripeSetupIntentId || "");
   if (stored?.lastSetupSessionId) state.lastSetupSessionId = String(stored.lastSetupSessionId || "");
   if (stored?.paymentMandateSetup != null) state.paymentMandateSetup = Boolean(stored.paymentMandateSetup);
+  if (stored?.createDraftGroupId) state.createDraftGroupId = String(stored.createDraftGroupId || "");
+  if (stored?.createDraftJoinCode) state.createDraftJoinCode = String(stored.createDraftJoinCode || "");
 
   state.user.initial = state.user.initial || initialFromName(state.user.name);
 
@@ -1314,6 +1324,8 @@ function persistCoreState() {
     stripeSetupIntentId: state.stripeSetupIntentId,
     lastSetupSessionId: state.lastSetupSessionId,
     paymentMandateSetup: state.paymentMandateSetup,
+    createDraftGroupId: state.createDraftGroupId,
+    createDraftJoinCode: state.createDraftJoinCode,
     onboardingComplete: true,
   });
 }
@@ -3484,6 +3496,24 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
           label: "Invite",
           title: "Je zit nu in de group",
           message: `${state.group.name} · Offline invite (zonder backend).`,
+        });
+        return;
+      }
+
+      const localGroup = findLocalGroupByCode(groupCode);
+      if (localGroup?.id) {
+        state.group = {
+          ...state.group,
+          ...localGroup,
+          id: localGroup.id,
+          joinCode: String(localGroup.joinCode || localGroup.join_code || groupCode).trim(),
+        };
+        state.activeGroupId = localGroup.id;
+        await finalize();
+        showSheet({
+          label: "Join",
+          title: "Local group gevonden",
+          message: `${state.group.name} · Join via opgeslagen groups (zonder backend).`,
         });
         return;
       }
