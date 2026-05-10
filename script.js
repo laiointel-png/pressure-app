@@ -63,6 +63,74 @@ const state = {
 
 const STORAGE_KEY = "pressure.mvp.v1";
 const API_BASE_KEY = "pressureApiBase";
+const LEDGER_STORAGE_KEY = "pressure.ledger.v1";
+
+function loadLedgerStore() {
+  try {
+    const raw = localStorage.getItem(LEDGER_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function saveLedgerStore(next) {
+  const store = loadLedgerStore();
+  const merged = { ...store, ...next };
+  try {
+    localStorage.setItem(LEDGER_STORAGE_KEY, JSON.stringify(merged));
+  } catch {
+    // ignore quota
+  }
+  return merged;
+}
+
+function normalizeLedgerEntry(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const id = String(raw.id || raw.entry_id || "").trim() || newId("led");
+  const groupId = String(raw.groupId || raw.group_id || "").trim();
+  if (!groupId) return null;
+  const createdAt = String(raw.createdAt || raw.created_at || "").trim() || new Date().toISOString();
+  const kind = String(raw.kind || "note").trim();
+  const userId = String(raw.userId || raw.user_id || "").trim();
+  const displayName = String(raw.displayName || raw.display_name || "").trim();
+  const amountCents = Number(raw.amountCents ?? raw.amount_cents ?? 0) || 0;
+  const currency = String(raw.currency || "eur").trim().toLowerCase();
+  const description = String(raw.description || "").trim();
+  const status = String(raw.status || "ok").trim();
+  const paymentIntentId = String(raw.paymentIntentId || raw.payment_intent_id || "").trim();
+  return {
+    id,
+    groupId,
+    createdAt,
+    kind,
+    userId,
+    displayName,
+    amountCents,
+    currency,
+    description,
+    status,
+    paymentIntentId,
+  };
+}
+
+function ledgerEntriesForGroup(groupId) {
+  const store = loadLedgerStore();
+  const entries = store?.[groupId];
+  return Array.isArray(entries) ? entries.map(normalizeLedgerEntry).filter(Boolean) : [];
+}
+
+function upsertLedgerEntryLocal(entry) {
+  const normalized = normalizeLedgerEntry(entry);
+  if (!normalized) return null;
+  const existing = ledgerEntriesForGroup(normalized.groupId);
+  const next = [normalized, ...existing.filter((item) => item && item.id !== normalized.id)];
+  next.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  saveLedgerStore({ [normalized.groupId]: next.slice(0, 250) });
+  return normalized;
+}
 
 function loadModel() {
   try {
@@ -198,6 +266,8 @@ function setActiveGroup(groupId, { announce = true } = {}) {
   ensureSelfMemberLocal();
   persistCoreState();
   syncGroupUI();
+  syncLedgerUI();
+  syncLedgerFromBackend({ silent: true });
   updateInvitePreview();
   updateHome();
   updateCamera();
@@ -752,6 +822,7 @@ function showScreen(name) {
 
   if (name === "camera") startVision();
   if (name === "billing") checkStripeHealth({ silent: true });
+  if (name === "billing") syncLedgerFromBackend({ silent: true });
   if (name === "create") syncCreateScreenUI();
   if (name === "group") {
     syncGroupSyncPill();
@@ -2138,17 +2209,125 @@ async function setupMandateLive() {
   }
 }
 
-function simulateMissFee() {
+function formatLedgerMoney(amountCents, currency = "eur") {
+  const cents = Number(amountCents || 0);
+  const amount = (cents / 100).toFixed(2);
+  return `${String(currency || "eur").toUpperCase()} ${amount.replace(/\\.00$/, "")}`;
+}
+
+function renderLedgerEntry(entry) {
+  const row = document.createElement("article");
+  row.setAttribute("role", "listitem");
+
+  const when = document.createElement("span");
+  when.textContent = entry.status === "charged" ? "Backend" : "Nu";
+
+  const title = document.createElement("strong");
+  title.textContent = entry.description || entry.kind.replaceAll("_", " ");
+
+  const meta = document.createElement("em");
+  meta.textContent = entry.amountCents ? formatLedgerMoney(entry.amountCents, entry.currency) : entry.status || "ok";
+
+  row.appendChild(when);
+  row.appendChild(title);
+  row.appendChild(meta);
+  return row;
+}
+
+function syncLedgerUI() {
   const ledger = document.querySelector("#ledger-list");
-  if (ledger) {
-    const row = document.createElement("article");
-    row.innerHTML = `
-      <span>Nu</span>
-      <strong>Timothy miss fee verwerkt als ${destinationLabel()}</strong>
-      <em>EUR 10</em>
-    `;
-    ledger.prepend(row);
+  if (!ledger) return;
+  ledger.innerHTML = "";
+  const entries = ledgerEntriesForGroup(state.group.id);
+  if (!entries.length) {
+    const empty = document.createElement("article");
+    empty.setAttribute("role", "listitem");
+    const span = document.createElement("span");
+    span.textContent = "—";
+    const strong = document.createElement("strong");
+    strong.textContent = "Nog geen misses";
+    const em = document.createElement("em");
+    em.textContent = "Demo";
+    empty.appendChild(span);
+    empty.appendChild(strong);
+    empty.appendChild(em);
+    ledger.appendChild(empty);
+    return;
   }
+  entries.slice(0, 20).forEach((entry) => ledger.appendChild(renderLedgerEntry(entry)));
+}
+
+async function syncLedgerFromBackend({ silent = true } = {}) {
+  if (!state.apiBase) {
+    syncLedgerUI();
+    return [];
+  }
+  try {
+    const payload = await api.get(`/api/ledger/${encodeURIComponent(state.group.id)}?limit=50`);
+    const entries = Array.isArray(payload?.entries) ? payload.entries : [];
+    entries.map(normalizeLedgerEntry).filter(Boolean).forEach(upsertLedgerEntryLocal);
+    syncLedgerUI();
+    return entries;
+  } catch {
+    if (!silent) {
+      showSheet({
+        label: "Ledger",
+        title: "Ledger sync mislukt",
+        message: "Backend niet bereikbaar of endpoint faalde. We tonen de local ledger.",
+      });
+    }
+    syncLedgerUI();
+    return [];
+  }
+}
+
+async function appendLedgerToBackend(entry, { silent = true } = {}) {
+  if (!state.apiBase) return null;
+  const normalized = normalizeLedgerEntry(entry);
+  if (!normalized) return null;
+  try {
+    const payload = await api.post("/api/ledger", {
+      group_id: normalized.groupId,
+      kind: normalized.kind,
+      user_id: normalized.userId,
+      display_name: normalized.displayName,
+      amount_cents: normalized.amountCents,
+      currency: normalized.currency,
+      description: normalized.description,
+      status: normalized.status,
+      payment_intent_id: normalized.paymentIntentId,
+      created_at: normalized.createdAt,
+    });
+    const saved = normalizeLedgerEntry(payload?.entry || payload);
+    if (saved) upsertLedgerEntryLocal(saved);
+    syncLedgerUI();
+    return saved;
+  } catch {
+    if (!silent) {
+      showSheet({
+        label: "Ledger",
+        title: "Ledger save mislukt",
+        message: "Backend niet bereikbaar of gaf een error. Local ledger blijft leidend.",
+      });
+    }
+    return null;
+  }
+}
+
+function simulateMissFee() {
+  const entry = upsertLedgerEntryLocal({
+    groupId: state.group.id,
+    kind: "miss_fee",
+    userId: "user_timothy",
+    displayName: "Timothy",
+    amountCents: 1000,
+    currency: "eur",
+    status: "simulated",
+    description: `Timothy miss fee verwerkt als ${destinationLabel()}`,
+    createdAt: new Date().toISOString(),
+  });
+  if (entry) appendLedgerToBackend(entry, { silent: true });
+  syncLedgerUI();
 
   addFeedItem("Timothy miste de deadline", `EUR 10 ${destinationLabel()}, geen pot`, "bad");
   showSheet({
@@ -2185,19 +2364,22 @@ async function chargeMissFeeBackend() {
       amount_cents: 1000,
       reason: "missed_live_checks",
     });
-
-    const ledger = document.querySelector("#ledger-list");
-    if (ledger) {
-      const row = document.createElement("article");
-      const mode = response?.mode || "demo";
-      const status = response?.status || response?.ledger_status || "ok";
-      row.innerHTML = `
-        <span>Backend</span>
-        <strong>Miss fee charge (${mode})</strong>
-        <em>${status}</em>
-      `;
-      ledger.prepend(row);
-    }
+    const mode = response?.mode || "demo";
+    const status = response?.status || response?.ledger_status || "ok";
+    const entry = upsertLedgerEntryLocal({
+      groupId: state.group.id,
+      kind: "miss_fee",
+      userId: state.user.id,
+      displayName: state.user.name || "Jij",
+      amountCents: 1000,
+      currency: "eur",
+      status: mode === "stripe" ? String(status || "charged") : "simulated",
+      paymentIntentId: response?.payment_intent_id || "",
+      description: `Miss fee charge (${mode})`,
+      createdAt: new Date().toISOString(),
+    });
+    if (entry) appendLedgerToBackend(entry, { silent: true });
+    syncLedgerUI();
 
     showSheet({
       label: "Backend",
@@ -2210,6 +2392,107 @@ async function chargeMissFeeBackend() {
       title: "Charge failed",
       message: "Backend endpoint is niet bereikbaar of gaf een error. UI blijft veilig in demo mode.",
     });
+  }
+}
+
+async function settleTodaysMisses() {
+  const button = document.querySelector("#settle-day");
+  if (button instanceof HTMLButtonElement) {
+    button.disabled = true;
+    button.textContent = "Verwerken...";
+  }
+
+  try {
+    const roster = currentGroupMembers();
+    const misses = roster.filter((member) => member.userId && member.checksCompleted < exercises.length);
+    if (!misses.length) {
+      showSheet({
+        label: "Ledger",
+        title: "Geen misses vandaag",
+        message: "Iedereen staat op 4/4. Niets te verwerken.",
+      });
+      return;
+    }
+
+    if (state.apiBase) await syncLedgerFromBackend({ silent: true });
+
+    let processed = 0;
+    for (const member of misses) {
+      let profile = null;
+      if (state.apiBase) {
+        try {
+          const payload = await api.get(`/api/profiles/${encodeURIComponent(member.userId)}`);
+          profile = payload?.profile || payload;
+        } catch {
+          profile = null;
+        }
+      }
+
+      const stripeCustomerId = String(profile?.stripe_customer_id || profile?.stripeCustomerId || "").trim();
+      const stripePaymentMethodId = String(profile?.stripe_payment_method_id || profile?.stripePaymentMethodId || "").trim();
+      const displayName = member.userId === state.user.id ? "Jij" : member.displayName;
+      const description = `${displayName} miss ${member.checksCompleted}/${exercises.length} · ${destinationLabel()}`;
+
+      if (!state.apiBase || !stripeCustomerId || !stripePaymentMethodId) {
+        const entry = upsertLedgerEntryLocal({
+          groupId: state.group.id,
+          kind: "miss_fee",
+          userId: member.userId,
+          displayName,
+          amountCents: 1000,
+          currency: "eur",
+          status: state.apiBase ? "needs_setup" : "simulated",
+          description,
+          createdAt: new Date().toISOString(),
+        });
+        if (entry) await appendLedgerToBackend(entry, { silent: true });
+        processed += 1;
+        continue;
+      }
+
+      let charge = null;
+      try {
+        charge = await api.post("/api/payments/miss-fee", {
+          stripe_customer_id: stripeCustomerId,
+          payment_method_id: stripePaymentMethodId,
+          user_id: member.userId,
+          group_id: state.group.id,
+          amount_cents: 1000,
+          reason: "missed_live_checks",
+        });
+      } catch {
+        charge = null;
+      }
+
+      const mode = charge?.mode || "demo";
+      const status = charge?.status || charge?.ledger_status || (mode === "stripe" ? "charged" : "simulated");
+      const entry = upsertLedgerEntryLocal({
+        groupId: state.group.id,
+        kind: "miss_fee",
+        userId: member.userId,
+        displayName,
+        amountCents: 1000,
+        currency: "eur",
+        status: mode === "stripe" ? String(status || "charged") : "simulated",
+        paymentIntentId: charge?.payment_intent_id || "",
+        description,
+        createdAt: new Date().toISOString(),
+      });
+      if (entry) await appendLedgerToBackend(entry, { silent: true });
+      processed += 1;
+    }
+
+    syncLedgerUI();
+    showSheet({
+      label: "Ledger",
+      title: "Misses verwerkt",
+      message: `Verwerkt: ${processed}. Backend charges draaien alleen als customer + payment method bekend zijn.`,
+    });
+  } finally {
+    if (button instanceof HTMLButtonElement) {
+      button.disabled = false;
+      button.textContent = "Verwerk misses";
+    }
   }
 }
 
@@ -2593,6 +2876,7 @@ document.querySelector("#setup-mandate")?.addEventListener("click", setupMandate
 document.querySelector("#billing-open-portal")?.addEventListener("click", openCustomerPortal);
 document.querySelector("#simulate-miss-fee").addEventListener("click", simulateMissFee);
 document.querySelector("#charge-miss-fee")?.addEventListener("click", chargeMissFeeBackend);
+document.querySelector("#settle-day")?.addEventListener("click", settleTodaysMisses);
 
 document.querySelector("#stripe-customer-id")?.addEventListener("input", (event) => {
   state.stripeCustomerId = event.target.value.trim();
@@ -3048,6 +3332,7 @@ async function bootstrapBackendSync() {
   await syncGroupsFromBackend({ silent: true });
   await syncMembersFromBackend({ silent: true });
   await syncCheckinsFromBackend({ silent: true });
+  await syncLedgerFromBackend({ silent: true });
 }
 
 hydrateFromStorage();
@@ -3057,6 +3342,7 @@ renderGroupSelector();
 syncGroupUI();
 syncUserUI();
 syncPaymentModel();
+syncLedgerUI();
 renderMemberList([]);
 updateInvitePreview();
 updateHome();

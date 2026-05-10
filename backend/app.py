@@ -35,6 +35,7 @@ CHECKINS_PATH = DATA_DIR / "checkins.json"
 MEMBERS_PATH = DATA_DIR / "members.json"
 PROFILES_PATH = DATA_DIR / "profiles.json"
 INVITES_PATH = DATA_DIR / "invites.json"
+LEDGER_PATH = DATA_DIR / "ledger.json"
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -293,6 +294,68 @@ def create_invite(payload: InviteCreatePayload) -> dict[str, Any]:
     _write_json(INVITES_PATH, invites)
     _write_json(GROUPS_PATH, groups)
     return {"join_code": code, "group_id": group_id}
+
+
+class LedgerEventPayload(BaseModel):
+    group_id: str
+    kind: str = "note"
+    user_id: str = ""
+    display_name: str = ""
+    amount_cents: int = 0
+    currency: str = "eur"
+    description: str = ""
+    status: str = "ok"
+    payment_intent_id: str = ""
+    created_at: str = ""  # ISO timestamp; server will fill if empty
+
+
+def _read_ledger() -> list[dict[str, Any]]:
+    items = _read_json(LEDGER_PATH, default=[])
+    if isinstance(items, list):
+        return [item for item in items if isinstance(item, dict)]
+    return []
+
+
+@app.get("/api/ledger/{group_id}")
+def list_ledger(group_id: str, limit: int = 50) -> dict[str, Any]:
+    entries = [item for item in _read_ledger() if item.get("group_id") == group_id]
+    entries.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    safe_limit = max(1, min(int(limit or 50), 250))
+    return {"group_id": group_id, "entries": entries[:safe_limit]}
+
+
+@app.post("/api/ledger")
+def append_ledger(payload: LedgerEventPayload) -> dict[str, Any]:
+    group_id = (payload.group_id or "").strip()
+    if not group_id:
+        raise HTTPException(status_code=400, detail="missing_group_id")
+
+    groups = _read_json(GROUPS_PATH, default={})
+    if not isinstance(groups, dict) or group_id not in groups:
+        raise HTTPException(status_code=404, detail="group_not_found")
+
+    entry = payload.model_dump()
+    entry["group_id"] = group_id
+    entry["kind"] = (entry.get("kind") or "note")[:64]
+    entry["currency"] = (entry.get("currency") or "eur")[:8].lower()
+    entry["amount_cents"] = int(entry.get("amount_cents") or 0)
+    entry["status"] = (entry.get("status") or "ok")[:32]
+    entry["payment_intent_id"] = (entry.get("payment_intent_id") or "")[:128]
+    entry["user_id"] = (entry.get("user_id") or "")[:128]
+    entry["display_name"] = (entry.get("display_name") or "")[:128]
+    entry["description"] = (entry.get("description") or "")[:280]
+
+    if not entry.get("created_at"):
+        from datetime import datetime, timezone
+
+        entry["created_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    if not entry.get("id"):
+        entry["id"] = f"led_{secrets.token_hex(6)}"
+
+    ledger = _read_ledger()
+    ledger.append(entry)
+    _write_json(LEDGER_PATH, ledger)
+    return {"entry": entry}
 
 
 if payments_app is not None:

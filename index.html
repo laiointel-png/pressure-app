@@ -18,7 +18,7 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050505'/%3E%3Cpath d='M18 42 44 16' stroke='%23ff5a00' stroke-width='9' stroke-linecap='round'/%3E%3Cpath d='M20 20h20v20H20z' fill='none' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E"
     />
-	    <link rel="stylesheet" href="./styles.css?v=26" />
+	    <link rel="stylesheet" href="./styles.css?v=27" />
   </head>
   <body>
     <main class="app-shell">
@@ -789,23 +789,24 @@
             <small class="field-hint" id="billing-confirm-hint">Zonder backend blijft dit demo-only. Met backend + sk_test_ start je een echte test checkout.</small>
           </section>
 
-          <section class="content-card" aria-labelledby="ledger-title">
-            <div class="section-title row">
-              <div>
-                <span class="section-label">Ledger demo</span>
-                <h2 id="ledger-title">Transparant voor de groep</h2>
-              </div>
-              <div class="ledger-actions">
-                <button class="text-button" id="simulate-miss-fee" type="button">Simuleer miss</button>
-                <button class="text-button" id="charge-miss-fee" type="button">Charge backend</button>
-              </div>
-            </div>
-            <div class="ledger-list" id="ledger-list">
-              <article>
-                <span>Vandaag</span>
-                <strong>Mila verified 4/4</strong>
-                <em>EUR 0</em>
-              </article>
+	          <section class="content-card" aria-labelledby="ledger-title">
+	            <div class="section-title row">
+	              <div>
+	                <span class="section-label">Ledger demo</span>
+	                <h2 id="ledger-title">Transparant voor de groep</h2>
+	              </div>
+	              <div class="ledger-actions">
+	                <button class="text-button" id="simulate-miss-fee" type="button">Simuleer miss</button>
+	                <button class="text-button" id="charge-miss-fee" type="button">Charge backend</button>
+	                <button class="text-button" id="settle-day" type="button">Verwerk misses</button>
+	              </div>
+	            </div>
+	            <div class="ledger-list" id="ledger-list" role="list" aria-live="polite">
+	              <article>
+	                <span>Vandaag</span>
+	                <strong>Mila verified 4/4</strong>
+	                <em>EUR 0</em>
+	              </article>
               <article>
                 <span>Gisteren</span>
                 <strong>Layo miss fee verwerkt</strong>
@@ -973,6 +974,6 @@
       </section>
     </main>
 
-    <script src="./script.js?v=26"></script>
+    <script src="./script.js?v=27"></script>
   </body>
 </html>
