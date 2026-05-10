@@ -531,9 +531,28 @@ const api = {
   async request(path, init) {
     if (!this.base) throw new Error("no_api_base");
     const url = `${this.base}${path}`;
-    const response = await fetch(url, init);
-    if (!response.ok) throw new Error(`${response.status}:${path}`);
-    return response.json();
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 6500);
+    try {
+      const response = await fetch(url, { ...init, signal: controller.signal });
+      if (!response.ok) {
+        let detail = "";
+        try {
+          const payload = await response.json();
+          detail = String(payload?.detail || payload?.error || "").trim();
+        } catch {
+          detail = "";
+        }
+        const suffix = detail ? `:${detail}` : "";
+        throw new Error(`${response.status}:${path}${suffix}`);
+      }
+      return response.json();
+    } catch (error) {
+      if (String(error?.name || "") === "AbortError") throw new Error(`timeout:${path}`);
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   },
   post(path, body) {
     return this.request(path, {
@@ -3170,7 +3189,7 @@ async function previewJoinGroup() {
   }
 
   if (!apiBase) {
-    if (invitePayload?.id && invitePayload.id === groupCode) {
+    if (invitePayload?.id) {
       showSheet({
         label: "Invite",
         title: "Group info uit invite",
@@ -3180,8 +3199,7 @@ async function previewJoinGroup() {
         primary: "Gebruik deze group",
         onPrimary: () => {
           setOnboardingGroupMode("join", { focus: false });
-          const code = document.querySelector("#onboard-group-code");
-          if (code) code.value = invitePayload.id;
+          if (codeField instanceof HTMLElement) codeField.focus();
         },
       });
       return;
@@ -3214,7 +3232,7 @@ async function previewJoinGroup() {
       onPrimary: () => {
         setOnboardingGroupMode("join", { focus: false });
         const code = document.querySelector("#onboard-group-code");
-        if (code) code.value = group.id;
+        if (code) code.value = group.joinCode || group.id;
       },
     });
   } catch {
@@ -3239,7 +3257,7 @@ document.querySelector("#skip-onboarding")?.addEventListener("click", () => {
   showScreen("home");
 });
 
-document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
+document.querySelector("#onboard-form")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.target;
   if (form instanceof HTMLFormElement && !form.checkValidity()) {
@@ -3349,7 +3367,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
         };
         state.group = { ...state.group, ...group, id: group.id, joinCode: groupCode };
         state.activeGroupId = group.id;
-        finalize();
+        await finalize();
         showSheet({
           label: "Invite",
           title: "Je zit nu in de group",
@@ -3367,34 +3385,33 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
       return;
     }
 
-    api
-      .get(`/api/invites/${encodeURIComponent(groupCode)}`)
-      .then((payload) => payload?.group || payload)
-      .catch(() => api.get(`/api/groups/${encodeURIComponent(groupCode)}`).then((payload) => payload?.group || payload))
-      .then((rawGroup) => {
-        const group = normalizeBackendGroup(rawGroup);
-        if (!group) throw new Error("group_invalid");
-        state.group = { ...state.group, ...group, id: group.id, joinCode: group.joinCode || groupCode };
-        state.activeGroupId = group.id;
-        finalize();
-        showSheet({
-          label: "Join",
-          title: "Je zit nu in de group",
-          message: `${state.group.name} · Deadline ${state.group.deadline}.`,
-        });
-      })
-      .catch(() => {
-        showSheet({
-          label: "Join",
-          title: "Join mislukt",
-          message: "Invite code / group id niet gevonden of backend gaf een error. Check code, backend en CORS.",
-        });
+    try {
+      const rawGroup = await api
+        .get(`/api/invites/${encodeURIComponent(groupCode)}`)
+        .then((payload) => payload?.group || payload)
+        .catch(() => api.get(`/api/groups/${encodeURIComponent(groupCode)}`).then((payload) => payload?.group || payload));
+      const group = normalizeBackendGroup(rawGroup);
+      if (!group) throw new Error("group_invalid");
+      state.group = { ...state.group, ...group, id: group.id, joinCode: group.joinCode || groupCode };
+      state.activeGroupId = group.id;
+      await finalize();
+      showSheet({
+        label: "Join",
+        title: "Je zit nu in de group",
+        message: `${state.group.name} · Deadline ${state.group.deadline}.`,
       });
+    } catch {
+      showSheet({
+        label: "Join",
+        title: "Join mislukt",
+        message: "Invite code / group id niet gevonden of backend gaf een error. Check code, backend en CORS.",
+      });
+    }
     return;
   }
 
   state.onboardingGroupMode = "create";
-  finalize();
+  await finalize();
 });
 
 document.querySelectorAll("[data-screen-target]").forEach((button) => {
