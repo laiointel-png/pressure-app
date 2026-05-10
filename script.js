@@ -459,6 +459,61 @@ function consumeJoinInviteFromUrl() {
   return { join, apiBase, groupPayload };
 }
 
+function extractJoinInviteFromText(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return null;
+
+  const maybeUrl = text.startsWith("http://") || text.startsWith("https://") ? text : `https://${text}`;
+  if (!/(\?|#).*(^|[?&#])join=/.test(maybeUrl) && !text.includes("/?join=") && !text.includes("&join=")) return null;
+
+  try {
+    const url = new URL(maybeUrl);
+    const searchJoin = url.searchParams.get("join")?.trim() || "";
+    const searchApi = url.searchParams.get("apiBase") || url.searchParams.get("api") || "";
+    const searchPayload = decodeInvitePayload(url.searchParams.get("g") || "");
+
+    let hashJoin = "";
+    let hashApi = "";
+    let hashPayload = null;
+    if (!searchJoin && url.hash) {
+      const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+      const [, hashQuery = ""] = hash.split("?");
+      if (hashQuery) {
+        const params = new URLSearchParams(hashQuery);
+        hashJoin = params.get("join")?.trim() || "";
+        hashApi = params.get("apiBase") || params.get("api") || "";
+        hashPayload = decodeInvitePayload(params.get("g") || "");
+      }
+    }
+
+    const join = searchJoin || hashJoin;
+    if (!join) return null;
+    const apiBase = normalizeApiBase(searchApi || hashApi || "");
+    const groupPayload = searchPayload || hashPayload;
+    return { join, apiBase, groupPayload };
+  } catch {
+    return null;
+  }
+}
+
+function hydrateOnboardingFromInviteText(rawText) {
+  const invite = extractJoinInviteFromText(rawText);
+  if (!invite?.join) return null;
+
+  const codeField = document.querySelector("#onboard-group-code");
+  if (codeField) codeField.value = invite.join;
+
+  if (invite.apiBase) {
+    const apiField = document.querySelector("#onboard-api-base");
+    if (apiField) apiField.value = invite.apiBase;
+    state.apiBase = invite.apiBase;
+    localStorage.setItem(API_BASE_KEY, invite.apiBase);
+  }
+
+  if (invite.groupPayload) state.inviteGroupPayload = invite.groupPayload;
+  return invite;
+}
+
 function parseHashRoute(hashValue = window.location.hash) {
   const raw = String(hashValue || "");
   if (!raw || raw === "#") return { screen: "home", params: new URLSearchParams() };
@@ -2687,6 +2742,7 @@ function buildGroupsExportPayload() {
       deadline: group.deadline,
       feeLabel: group.feeLabel,
       destinationLabel: group.destinationLabel,
+      joinCode: group.joinCode || "",
     })),
   };
 }
@@ -3089,10 +3145,13 @@ document.querySelector("#onboard-group-mode-join")?.addEventListener("change", (
 });
 
 async function previewJoinGroup() {
-  const apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+  let apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
   const codeField = document.querySelector("#onboard-group-code");
-  const groupCode = codeField?.value?.trim() || "";
-  const invitePayload = state.inviteGroupPayload;
+  let groupCode = codeField?.value?.trim() || "";
+  const hydrated = hydrateOnboardingFromInviteText(groupCode);
+  if (hydrated?.join) groupCode = hydrated.join;
+  apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+  const invitePayload = hydrated?.groupPayload || state.inviteGroupPayload;
 
   if (!groupCode) {
     showSheet({
@@ -3185,11 +3244,14 @@ document.querySelector("#onboard-form")?.addEventListener("submit", (event) => {
   const email = document.querySelector("#onboard-email")?.value?.trim() || "";
   const mode = document.querySelector('input[name="onboardGroupMode"]:checked')?.value || "create";
   const groupName = document.querySelector("#onboard-group-name")?.value?.trim() || "Nieuwe groep";
-  const groupCode = document.querySelector("#onboard-group-code")?.value?.trim() || "";
+  let groupCode = document.querySelector("#onboard-group-code")?.value?.trim() || "";
   const deadline = document.querySelector("#onboard-deadline")?.value || "22:00";
   const feeLabel = document.querySelector("#onboard-fee")?.value || "EUR 10";
-  const apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
-  const invitePayload = state.inviteGroupPayload;
+  let apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+  const hydrated = hydrateOnboardingFromInviteText(groupCode);
+  if (hydrated?.join) groupCode = hydrated.join;
+  apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+  const invitePayload = hydrated?.groupPayload || state.inviteGroupPayload;
 
   state.user = {
     ...state.user,
