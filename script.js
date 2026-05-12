@@ -49,6 +49,7 @@ const state = {
   lastBackendSyncAt: 0,
   lastBackendGroupSaveAt: 0,
   lastBackendCheckinAt: 0,
+  onboardingComplete: false,
   successKind: "workout",
   lastCheckoutSessionId: "",
   stripeCustomerId: "",
@@ -865,6 +866,7 @@ function resetToDemo() {
   state.feeDestination = "platform";
   state.onboardingMode = "setup";
   state.onboardingReturnTo = "home";
+  state.onboardingComplete = false;
   persistCoreState();
   syncGroupUI();
   syncUserUI();
@@ -1261,6 +1263,7 @@ function hydrateFromStorage() {
     "";
 
   if (stored?.user) state.user = { ...state.user, ...stored.user };
+  if (stored?.onboardingComplete != null) state.onboardingComplete = Boolean(stored.onboardingComplete);
   state.groups = normalizeStoredGroups(stored?.groups);
   state.membersByGroup = normalizeStoredMembers(stored?.membersByGroup);
   if (stored?.onboardingGroupMode) state.onboardingGroupMode = stored.onboardingGroupMode;
@@ -1326,7 +1329,7 @@ function persistCoreState() {
     paymentMandateSetup: state.paymentMandateSetup,
     createDraftGroupId: state.createDraftGroupId,
     createDraftJoinCode: state.createDraftJoinCode,
-    onboardingComplete: true,
+    onboardingComplete: state.onboardingComplete,
   });
 }
 
@@ -3375,6 +3378,8 @@ document.querySelector("#skip-onboarding")?.addEventListener("click", () => {
   }
 
   resetToDemo();
+  state.onboardingComplete = true;
+  persistCoreState();
   showScreen("home");
 });
 
@@ -3434,6 +3439,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
     }
     upsertGroup(state.group);
     ensureSelfMemberLocal();
+    state.onboardingComplete = true;
     persistCoreState();
     syncGroupUI();
     syncUserUI();
