@@ -24,9 +24,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 try:
-    from backend.payment_api_example import app as payments_app
+    from backend.payment_api_example import router as payments_router
 except Exception:  # pragma: no cover - optional for prototype.
-    payments_app = None
+    payments_router = None
 
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -75,7 +75,7 @@ def health() -> dict[str, Any]:
             "groups": True,
             "members": True,
             "profiles": True,
-            "payments": payments_app is not None,
+            "payments": payments_router is not None,
         },
     }
 
@@ -384,5 +384,5 @@ def append_ledger(payload: LedgerEventPayload) -> dict[str, Any]:
     return {"entry": entry}
 
 
-if payments_app is not None:
-    app.include_router(payments_app.router)
+if payments_router is not None:
+    app.include_router(payments_router)

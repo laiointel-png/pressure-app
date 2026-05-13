@@ -19,8 +19,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 try:
@@ -34,17 +33,12 @@ APP_URL = os.getenv("PRESSURE_APP_URL", "http://localhost:5173")
 STRIPE_MODE = os.getenv("PRESSURE_STRIPE_MODE", "test_only").strip().lower()
 ALLOW_LIVE = os.getenv("PRESSURE_STRIPE_ALLOW_LIVE", "").strip().lower() in {"1", "true", "yes", "on"}
 
+router = APIRouter()
+
+# Keep a standalone FastAPI app for local runs (`uvicorn backend.payment_api_example:app`),
+# but export `router` for inclusion into `backend.app` without duplicating middleware.
 app = FastAPI(title="Pressure Payment API")
-_default_origins = ["http://localhost:5173", "http://127.0.0.1:5173", "null"]
-_extra_origins = [origin.strip() for origin in os.getenv("PRESSURE_ALLOWED_ORIGINS", "").split(",") if origin.strip()]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[*_default_origins, *_extra_origins],
-    allow_origin_regex=r"https://.*\.github\.io$",
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-)
+app.include_router(router)
 
 
 class CheckoutRequest(BaseModel):
@@ -129,7 +123,7 @@ def _safe_return_url(raw: str) -> str:
     return f"{APP_URL}/#billing"
 
 
-@app.get("/api/payments/health")
+@router.get("/api/payments/health")
 def health() -> dict[str, Any]:
     key = os.getenv("STRIPE_SECRET_KEY", "")
     is_live_key = key.startswith("sk_live_")
@@ -144,7 +138,7 @@ def health() -> dict[str, Any]:
         "live_key_allowed": bool(ALLOW_LIVE),
     }
 
-@app.get("/api/payments/checkout-session/{session_id}")
+@router.get("/api/payments/checkout-session/{session_id}")
 def get_checkout_session(session_id: str) -> dict[str, Any]:
     if not stripe_client_ready():
         return demo_response(
@@ -178,7 +172,7 @@ def get_checkout_session(session_id: str) -> dict[str, Any]:
     }
 
 
-@app.post("/api/payments/pass-checkout")
+@router.post("/api/payments/pass-checkout")
 def create_pass_checkout(payload: CheckoutRequest) -> dict[str, Any]:
     price_id = os.getenv("PRESSURE_PASS_PRICE_ID")
     if not stripe_client_ready() or not price_id:
@@ -202,7 +196,7 @@ def create_pass_checkout(payload: CheckoutRequest) -> dict[str, Any]:
     return {"mode": "stripe", "checkout_url": session.url, "session_id": session.id}
 
 
-@app.post("/api/payments/setup-session")
+@router.post("/api/payments/setup-session")
 def create_setup_session(payload: SetupSessionRequest) -> dict[str, Any]:
     if not stripe_client_ready():
         return demo_response(
@@ -242,7 +236,7 @@ def create_setup_session(payload: SetupSessionRequest) -> dict[str, Any]:
     return {"mode": "stripe", "checkout_url": session.url, "session_id": session.id}
 
 
-@app.get("/api/payments/setup-intent/{intent_id}")
+@router.get("/api/payments/setup-intent/{intent_id}")
 def get_setup_intent(intent_id: str) -> dict[str, Any]:
     if not stripe_client_ready():
         return demo_response(
@@ -267,7 +261,7 @@ def get_setup_intent(intent_id: str) -> dict[str, Any]:
         "payment_method_id": payment_method_id,
     }
 
-@app.post("/api/payments/customer-portal")
+@router.post("/api/payments/customer-portal")
 def open_customer_portal(payload: PortalRequest) -> dict[str, Any]:
     if not stripe_client_ready():
         return demo_response("customer_portal", {"portal_url": f"{APP_URL}/#billing"})
@@ -290,7 +284,7 @@ def open_customer_portal(payload: PortalRequest) -> dict[str, Any]:
     return {"mode": "stripe", "portal_url": session.url, "customer_id": customer_id}
 
 
-@app.post("/api/payments/setup-mandate")
+@router.post("/api/payments/setup-mandate")
 def create_setup_intent(payload: SetupRequest) -> dict[str, Any]:
     if not stripe_client_ready():
         return demo_response("setup_intent", {"client_secret": "seti_demo_secret"})
@@ -303,7 +297,7 @@ def create_setup_intent(payload: SetupRequest) -> dict[str, Any]:
     return {"mode": "stripe", "client_secret": intent.client_secret, "setup_intent_id": intent.id}
 
 
-@app.post("/api/payments/miss-fee")
+@router.post("/api/payments/miss-fee")
 def charge_miss_fee(payload: MissFeeRequest) -> dict[str, Any]:
     if not stripe_client_ready():
         return demo_response(
@@ -338,7 +332,7 @@ def charge_miss_fee(payload: MissFeeRequest) -> dict[str, Any]:
     }
 
 
-@app.post("/api/payments/webhook")
+@router.post("/api/payments/webhook")
 async def stripe_webhook(request: Request) -> dict[str, Any]:
     raw_body = await request.body()
     signature = request.headers.get("stripe-signature")

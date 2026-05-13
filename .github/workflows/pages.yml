@@ -24,6 +24,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify frontend bundle
+        run: |
+          node --check script.js
+          node scripts/a11y_check.mjs
+
+      - name: Verify backend compiles
+        run: |
+          python3 -m compileall -b backend
+
       - name: Prepare static site
         run: |
           rm -rf _site
