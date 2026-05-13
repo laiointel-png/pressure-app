@@ -616,6 +616,7 @@ function setApiStatus(kind, label) {
   pill.textContent = label;
   state.apiStatusKind = kind;
   syncOnboardingBackendActions();
+  syncOnboardingBillingActions();
 }
 
 function syncOnboardingBackendActions() {
@@ -635,6 +636,37 @@ function syncOnboardingBackendActions() {
   if (uploadButton instanceof HTMLButtonElement) {
     uploadButton.disabled = !enabled;
     uploadButton.setAttribute("aria-disabled", uploadButton.disabled ? "true" : "false");
+  }
+}
+
+function syncOnboardingBillingActions() {
+  const container = document.querySelector("#onboard-billing-actions");
+  if (!container) return;
+
+  const hint = document.querySelector("#onboard-billing-hint");
+  const baseField = document.querySelector("#onboard-api-base");
+  const base = normalizeApiBase(baseField?.value || state.apiBase || "");
+  const hasBackend = Boolean(base) && (state.apiStatusKind === "ok" || state.apiStatusKind === "neutral");
+
+  const mandateReady = Boolean(state.paymentMandateSetup || state.stripePaymentMethodId);
+  const passReady = Boolean(state.stripeSubscriptionId);
+  const statusLabel = mandateReady ? "Mandate" : passReady ? "Pass" : "Demo";
+
+  const pill = document.querySelector("#onboard-billing-pill");
+  if (pill) {
+    pill.classList.remove("ok", "bad", "neutral");
+    pill.classList.add(hasBackend ? "ok" : "neutral");
+    pill.textContent = statusLabel;
+  }
+
+  const enabled = Boolean(hasBackend && state.stripeReady);
+  container.classList.toggle("hidden", !enabled);
+  if (hint) hint.classList.toggle("hidden", !enabled);
+
+  const button = document.querySelector("#onboard-open-billing");
+  if (button instanceof HTMLButtonElement) {
+    button.disabled = !enabled;
+    button.setAttribute("aria-disabled", button.disabled ? "true" : "false");
   }
 }
 
@@ -716,6 +748,7 @@ async function testApiConnection(rawBase, { silent = false } = {}) {
     const stripeReady = Boolean(payments?.stripe_ready);
     state.stripeReady = stripeReady;
     persistCoreState();
+    syncOnboardingBillingActions();
 
     if (groupsReady && paymentsReady) {
       setApiStatus("ok", stripeReady ? "Stripe OK" : "API OK");
@@ -738,6 +771,7 @@ async function testApiConnection(rawBase, { silent = false } = {}) {
     setApiStatus("bad", "Offline");
     state.stripeReady = false;
     persistCoreState();
+    syncOnboardingBillingActions();
     if (!silent) {
       showSheet({
         label: "API",
@@ -1023,6 +1057,9 @@ function showScreen(name) {
 async function checkStripeHealth({ silent = false } = {}) {
   if (!state.apiBase) {
     setStripeStatus("bad", "Offline");
+    state.stripeReady = false;
+    persistCoreState();
+    syncOnboardingBillingActions();
     if (!silent) {
       showSheet({
         label: "Stripe",
@@ -1039,6 +1076,7 @@ async function checkStripeHealth({ silent = false } = {}) {
     const ready = Boolean(payload?.stripe_ready);
     state.stripeReady = ready;
     persistCoreState();
+    syncOnboardingBillingActions();
     const liveDetected = Boolean(payload?.live_key_detected);
     const liveAllowed = Boolean(payload?.live_key_allowed);
 
@@ -1063,6 +1101,7 @@ async function checkStripeHealth({ silent = false } = {}) {
     setStripeStatus("bad", "Error");
     state.stripeReady = false;
     persistCoreState();
+    syncOnboardingBillingActions();
     if (!silent) {
       showSheet({
         label: "Stripe",
@@ -3424,6 +3463,13 @@ document.addEventListener("keydown", (event) => {
 
 document.querySelector("#onboard-back")?.addEventListener("click", () => {
   showScreen(state.onboardingReturnTo || "home");
+});
+
+document.querySelector("#onboard-open-billing")?.addEventListener("click", () => {
+  state.onboardingReturnTo = "onboard";
+  showScreen("billing");
+  const confirm = document.querySelector("#billing-confirm");
+  if (confirm instanceof HTMLElement) confirm.focus();
 });
 
 document.querySelector("#test-api")?.addEventListener("click", () => {

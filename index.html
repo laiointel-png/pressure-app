@@ -138,6 +138,13 @@
               <button class="secondary-button full-width" id="onboard-sync-groups" type="button">Sync groups</button>
               <button class="secondary-button full-width" id="onboard-upload-groups" type="button">Upload local</button>
             </div>
+            <div class="onboard-row tight hidden" id="onboard-billing-actions" aria-label="Billing acties">
+              <button class="secondary-button full-width" id="onboard-open-billing" type="button">Open billing setup</button>
+              <span class="small-pill neutral" id="onboard-billing-pill" aria-label="Billing status">Demo</span>
+            </div>
+            <small class="field-hint hidden" id="onboard-billing-hint">
+              Gebruik billing setup om (test) Stripe checkout + payment method (mandate) te koppelen. Zonder backend blijft dit demo-only.
+            </small>
 	            <button class="primary-button full-width" id="onboard-submit" type="submit">Start Pressure</button>
 	            <button class="text-button full-width" id="skip-onboarding" type="button">Gebruik demo data</button>
 	          </form>
