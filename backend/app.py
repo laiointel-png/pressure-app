@@ -119,6 +119,32 @@ def upsert_group(payload: GroupPayload) -> dict[str, Any]:
     return {"group": group}
 
 
+class GroupBulkPayload(BaseModel):
+    groups: list[GroupPayload]
+
+
+@app.post("/api/groups/bulk")
+def upsert_groups_bulk(payload: GroupBulkPayload) -> dict[str, Any]:
+    groups = _read_json(GROUPS_PATH, default={})
+    if not isinstance(groups, dict):
+        groups = {}
+
+    upserted: list[dict[str, Any]] = []
+    for item in payload.groups:
+        previous = groups.get(item.group_id) if isinstance(groups, dict) else None
+        join_code = (item.join_code or "").strip()
+        if not join_code and isinstance(previous, dict):
+            join_code = str(previous.get("join_code") or "").strip()
+
+        record = item.model_dump()
+        record["join_code"] = join_code
+        groups[item.group_id] = record
+        upserted.append(record)
+
+    _write_json(GROUPS_PATH, groups)
+    return {"upserted": len(upserted), "groups": upserted}
+
+
 class CheckinPayload(BaseModel):
     group_id: str
     user_id: str

@@ -56,6 +56,7 @@ const state = {
   stripeSubscriptionId: "",
   stripePaymentMethodId: "",
   stripeSetupIntentId: "",
+  stripeReady: false,
   lastSetupSessionId: "",
   paymentMandateSetup: false,
   createDraftGroupId: "",
@@ -713,6 +714,8 @@ async function testApiConnection(rawBase, { silent = false } = {}) {
     const groupsReady = Boolean(health?.features?.groups);
     const paymentsReady = Boolean(health?.features?.payments);
     const stripeReady = Boolean(payments?.stripe_ready);
+    state.stripeReady = stripeReady;
+    persistCoreState();
 
     if (groupsReady && paymentsReady) {
       setApiStatus("ok", stripeReady ? "Stripe OK" : "API OK");
@@ -733,6 +736,8 @@ async function testApiConnection(rawBase, { silent = false } = {}) {
     }
   } catch {
     setApiStatus("bad", "Offline");
+    state.stripeReady = false;
+    persistCoreState();
     if (!silent) {
       showSheet({
         label: "API",
@@ -1032,6 +1037,8 @@ async function checkStripeHealth({ silent = false } = {}) {
   try {
     const payload = await api.get("/api/payments/health");
     const ready = Boolean(payload?.stripe_ready);
+    state.stripeReady = ready;
+    persistCoreState();
     const liveDetected = Boolean(payload?.live_key_detected);
     const liveAllowed = Boolean(payload?.live_key_allowed);
 
@@ -1054,6 +1061,8 @@ async function checkStripeHealth({ silent = false } = {}) {
     }
   } catch {
     setStripeStatus("bad", "Error");
+    state.stripeReady = false;
+    persistCoreState();
     if (!silent) {
       showSheet({
         label: "Stripe",
@@ -1315,6 +1324,7 @@ function hydrateFromStorage() {
   if (stored?.stripeSubscriptionId) state.stripeSubscriptionId = String(stored.stripeSubscriptionId || "");
   if (stored?.stripePaymentMethodId) state.stripePaymentMethodId = String(stored.stripePaymentMethodId || "");
   if (stored?.stripeSetupIntentId) state.stripeSetupIntentId = String(stored.stripeSetupIntentId || "");
+  if (stored?.stripeReady != null) state.stripeReady = Boolean(stored.stripeReady);
   if (stored?.lastSetupSessionId) state.lastSetupSessionId = String(stored.lastSetupSessionId || "");
   if (stored?.paymentMandateSetup != null) state.paymentMandateSetup = Boolean(stored.paymentMandateSetup);
   if (stored?.createDraftGroupId) state.createDraftGroupId = String(stored.createDraftGroupId || "");
@@ -1350,6 +1360,7 @@ function persistCoreState() {
     stripeSubscriptionId: state.stripeSubscriptionId,
     stripePaymentMethodId: state.stripePaymentMethodId,
     stripeSetupIntentId: state.stripeSetupIntentId,
+    stripeReady: state.stripeReady,
     lastSetupSessionId: state.lastSetupSessionId,
     paymentMandateSetup: state.paymentMandateSetup,
     createDraftGroupId: state.createDraftGroupId,
@@ -2900,6 +2911,37 @@ async function pushLocalGroupsToBackend({ silent = false } = {}) {
 
   const groups = sortedGroups();
   if (!groups.length) return { uploaded: 0, failed: 0 };
+
+  try {
+    const payload = await api.post("/api/groups/bulk", {
+      groups: groups.map((group) => ({
+        group_id: group.id,
+        name: group.name,
+        deadline: group.deadline,
+        fee_label: group.feeLabel,
+        destination_label: group.destinationLabel,
+        join_code: group.joinCode || "",
+      })),
+    });
+    const uploaded = Number(payload?.upserted || 0) || groups.length;
+    for (const group of groups) {
+      const hasJoinCode = Boolean(String(group?.joinCode || group?.join_code || "").trim());
+      if (!hasJoinCode) await ensureInviteCodeFromBackend(group.id, { silent: true });
+    }
+    state.lastBackendSyncAt = Date.now();
+    persistCoreState();
+    syncGroupSyncPill();
+    if (!silent) {
+      showSheet({
+        label: "Sync",
+        title: "Local groups geüpload",
+        message: `Uploaded ${uploaded}. Failed 0.`,
+      });
+    }
+    return { uploaded, failed: 0 };
+  } catch {
+    // Older backend; fall back to per-group writes.
+  }
 
   let uploaded = 0;
   let failed = 0;
