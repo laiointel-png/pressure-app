@@ -70,6 +70,13 @@ For wiring the frontend to real endpoints (Stripe demo/real + group + member per
 .venv/bin/python -m uvicorn backend.app:app --port 8001
 ```
 
+What the backend enables:
+
+- Group persistence/sync (`/api/groups`, `/api/invites`)
+- Members + check-ins (`/api/members`, `/api/checkins`)
+- Payment-safe billing endpoints (`/api/payments/*`) with demo fallbacks when Stripe isn’t configured
+- Shared ledger events (`/api/ledger`)
+
 Stripe safety defaults:
 
 - Live keys (`sk_live_...`) are treated as **disabled** by default (fail-closed).
@@ -80,6 +87,14 @@ Then set the frontend API base in onboarding (or manually):
 
 ```js
 localStorage.setItem("pressureApiBase", "http://localhost:8001");
+```
+
+## Verify
+
+```bash
+node --check script.js
+python3 -m compileall -b backend
+node scripts/a11y_check.mjs
 ```
 
 ## GitHub Pages
