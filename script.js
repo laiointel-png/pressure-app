@@ -1747,7 +1747,7 @@ async function openCustomerPortal() {
       primary: "Open portal",
       secondary: "Sluiten",
       onPrimary: () => {
-        if (portalUrl) window.open(portalUrl, "_blank", "noopener,noreferrer");
+        if (portalUrl) openExternalUrl(portalUrl);
       },
     });
   } catch {
@@ -2319,7 +2319,7 @@ async function setupPaymentPermissionLive() {
       primary: "Open Checkout",
       secondary: "Sluiten",
       onPrimary: () => {
-        if (checkout.checkout_url) window.open(checkout.checkout_url, "_blank", "noopener,noreferrer");
+        if (checkout.checkout_url) openExternalUrl(checkout.checkout_url);
       },
     });
   } catch (error) {
@@ -2397,7 +2397,7 @@ async function setupMandateLive() {
       primary: "Open setup",
       secondary: "Sluiten",
       onPrimary: () => {
-        if (session.checkout_url) window.open(session.checkout_url, "_blank", "noopener,noreferrer");
+        if (session.checkout_url) openExternalUrl(session.checkout_url);
       },
     });
   } catch {
@@ -2547,6 +2547,19 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function openExternalUrl(url) {
+  const target = String(url || "").trim();
+  if (!target) return false;
+  try {
+    const tab = window.open(target, "_blank", "noopener,noreferrer");
+    if (tab) return true;
+  } catch {
+    // Popup blockers can throw; fallback below.
+  }
+  window.location.href = target;
+  return true;
 }
 
 async function appendLedgerToBackend(entry, { silent = true } = {}) {
@@ -2798,7 +2811,9 @@ async function ensureInviteCodeFromBackend(groupId, { silent = true } = {}) {
   const id = String(groupId || "").trim();
   if (!id) return "";
   try {
-    const payload = await api.post("/api/invites", { group_id: id });
+    const current = state.groups?.[id] || (state.group?.id === id ? state.group : null);
+    const requestedCode = String(current?.joinCode || current?.join_code || "").trim();
+    const payload = await api.post("/api/invites", { group_id: id, requested_code: requestedCode });
     const joinCode = String(payload?.join_code || "").trim();
     if (!joinCode) return "";
     state.groups[id] = { ...(state.groups[id] || {}), joinCode };
