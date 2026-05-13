@@ -301,6 +301,12 @@ function setActiveGroup(groupId, { announce = true } = {}) {
   syncGroupUI();
   syncLedgerUI();
   syncLedgerFromBackend({ silent: true });
+  if (state.apiBase) {
+    syncMembersFromBackend({ silent: true });
+    syncCheckinsFromBackend({ silent: true });
+    const joinCode = String(state.group.joinCode || state.group.join_code || "").trim();
+    if (!joinCode) ensureInviteCodeFromBackend(state.group.id, { silent: true });
+  }
   updateInvitePreview();
   updateHome();
   updateCamera();
