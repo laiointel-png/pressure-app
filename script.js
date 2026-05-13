@@ -975,6 +975,7 @@ function showScreen(name) {
   if (name === "billing") checkStripeHealth({ silent: true });
   if (name === "billing") syncLedgerFromBackend({ silent: true });
   if (name === "create") syncCreateScreenUI();
+  if (name === "rank") renderLeaderboard();
   if (name === "group") {
     syncGroupSyncPill();
     syncCheckinsFromBackend({ silent: true });
@@ -2459,6 +2460,69 @@ async function syncLedgerFromBackend({ silent = true } = {}) {
     syncLedgerUI();
     return [];
   }
+}
+
+function leaderboardStatsForMember(member) {
+  const userId = String(member?.userId || member?.user_id || "").trim();
+  const displayName = String(member?.displayName || member?.display_name || member?.name || "").trim() || "Lid";
+  const misses = ledgerEntriesForGroup(state.group.id).filter((entry) => entry?.kind === "miss_fee" && entry?.userId === userId)
+    .length;
+  const baseWorkouts =
+    userId === state.user.id ? Math.max(0, Number(state.verifiedCount || 0)) : Math.max(0, Number(member?.workouts || 0));
+  const workouts = baseWorkouts || (userId === "user_mila" ? 7 : userId === "user_layo" ? 5 : userId === "user_timothy" ? 2 : 3);
+  const points = workouts * 4 - misses * 10;
+  return { userId, displayName, workouts, misses, points };
+}
+
+function renderLeaderboard() {
+  const list = document.querySelector("#leaderboard-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const members = currentGroupMembers();
+  const fallback = demoRoster.map((item) => ({ ...item, userId: item.userId, displayName: item.displayName }));
+  const roster = members.length ? members : fallback;
+
+  const stats = roster
+    .map(leaderboardStatsForMember)
+    .filter((item) => item.userId)
+    .sort((a, b) => b.points - a.points || b.workouts - a.workouts || a.displayName.localeCompare(b.displayName));
+
+  if (!stats.length) {
+    const empty = document.createElement("li");
+    empty.className = "weak-row";
+    empty.innerHTML = `<div><strong>Nog geen leaderboard</strong><span>Maak een group of voeg leden toe.</span></div><em>—</em>`;
+    list.appendChild(empty);
+    return;
+  }
+
+  stats.forEach((item, index) => {
+    const row = document.createElement("li");
+    if (item.userId === state.user.id) row.classList.add("current-user");
+    if (index === stats.length - 1) row.classList.add("weak-row");
+    const subtitle = `${item.workouts} workouts, ${item.misses} misses`;
+    row.innerHTML = `
+      <span class="rank-pill">${index + 1}</span>
+      <div>
+        <strong>${escapeHtml(item.displayName)}</strong>
+        <span>${escapeHtml(subtitle)}</span>
+      </div>
+      <em>${item.points >= 0 ? `+${item.points}` : String(item.points)}</em>
+    `;
+    list.appendChild(row);
+  });
+
+  const userLine = stats.find((item) => item.userId === state.user.id);
+  if (userLine) setText("#rank-user-status", `${userLine.workouts} workouts, ${userLine.misses} misses`);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 async function appendLedgerToBackend(entry, { silent = true } = {}) {

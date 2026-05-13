@@ -571,40 +571,7 @@
             </div>
           </section>
 
-          <ol class="leaderboard-list">
-            <li>
-              <span class="rank-pill">1</span>
-              <div>
-                <strong>Mila</strong>
-                <span>7 workouts, 0 misses</span>
-              </div>
-              <em>+28</em>
-            </li>
-            <li class="current-user">
-              <span class="rank-pill">2</span>
-              <div>
-                <strong>Jij</strong>
-                <span id="rank-user-status">6 workouts, 0 misses</span>
-              </div>
-              <em>+21</em>
-            </li>
-            <li>
-              <span class="rank-pill">3</span>
-              <div>
-                <strong>Layo</strong>
-                <span>5 workouts, 1 miss</span>
-              </div>
-              <em>+16</em>
-            </li>
-            <li class="weak-row">
-              <span class="rank-pill">4</span>
-              <div>
-                <strong>Timothy</strong>
-                <span>Weakest link vandaag</span>
-              </div>
-              <em>-10</em>
-            </li>
-          </ol>
+          <ol class="leaderboard-list" id="leaderboard-list" aria-label="Leaderboard" role="list"></ol>
         </section>
 
         <section class="screen" id="screen-profile" aria-labelledby="profile-title" tabindex="-1">
@@ -801,18 +768,7 @@
 	                <button class="text-button" id="settle-day" type="button">Verwerk misses</button>
 	              </div>
 	            </div>
-	            <div class="ledger-list" id="ledger-list" role="list" aria-live="polite">
-	              <article>
-	                <span>Vandaag</span>
-	                <strong>Mila verified 4/4</strong>
-	                <em>EUR 0</em>
-	              </article>
-              <article>
-                <span>Gisteren</span>
-                <strong>Layo miss fee verwerkt</strong>
-                <em>EUR 10</em>
-              </article>
-            </div>
+	            <div class="ledger-list" id="ledger-list" role="list" aria-live="polite"></div>
           </section>
         </section>
 
