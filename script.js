@@ -61,6 +61,7 @@ const state = {
   createDraftGroupId: "",
   createDraftJoinCode: "",
   inviteGroupPayload: null,
+  apiStatusKind: "bad",
 };
 
 const STORAGE_KEY = "pressure.mvp.v1";
@@ -612,6 +613,28 @@ function setApiStatus(kind, label) {
   pill.classList.remove("ok", "bad", "neutral");
   pill.classList.add(kind);
   pill.textContent = label;
+  state.apiStatusKind = kind;
+  syncOnboardingBackendActions();
+}
+
+function syncOnboardingBackendActions() {
+  const container = document.querySelector("#onboard-backend-actions");
+  if (!container) return;
+  const baseField = document.querySelector("#onboard-api-base");
+  const base = normalizeApiBase(baseField?.value || state.apiBase || "");
+  const enabled = Boolean(base) && (state.apiStatusKind === "ok" || state.apiStatusKind === "neutral");
+  container.classList.toggle("hidden", !enabled);
+
+  const syncButton = document.querySelector("#onboard-sync-groups");
+  if (syncButton instanceof HTMLButtonElement) {
+    syncButton.disabled = !enabled;
+    syncButton.setAttribute("aria-disabled", syncButton.disabled ? "true" : "false");
+  }
+  const uploadButton = document.querySelector("#onboard-upload-groups");
+  if (uploadButton instanceof HTMLButtonElement) {
+    uploadButton.disabled = !enabled;
+    uploadButton.setAttribute("aria-disabled", uploadButton.disabled ? "true" : "false");
+  }
 }
 
 function setStripeStatus(kind, label) {
@@ -910,6 +933,7 @@ function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
   const prefilledApiBase = normalizeApiBase(invite?.apiBase || state.apiBase || "");
   setOnboardingGroupMode(state.onboardingGroupMode || "create", { focus: false });
   setApiStatus(prefilledApiBase ? "neutral" : "bad", prefilledApiBase ? "Ongetest" : "Offline");
+  syncOnboardingBackendActions();
   showScreen("onboard");
   state.pendingInvite = null;
 }
@@ -3348,6 +3372,24 @@ document.querySelector("#onboard-back")?.addEventListener("click", () => {
 document.querySelector("#test-api")?.addEventListener("click", () => {
   const base = document.querySelector("#onboard-api-base")?.value || "";
   testApiConnection(base);
+});
+
+document.querySelector("#onboard-sync-groups")?.addEventListener("click", async () => {
+  const base = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+  if (base) {
+    state.apiBase = base;
+    localStorage.setItem(API_BASE_KEY, base);
+  }
+  await syncGroupsFromBackend({ silent: false });
+});
+
+document.querySelector("#onboard-upload-groups")?.addEventListener("click", async () => {
+  const base = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+  if (base) {
+    state.apiBase = base;
+    localStorage.setItem(API_BASE_KEY, base);
+  }
+  await pushLocalGroupsToBackend({ silent: false });
 });
 
 document.querySelector("#onboard-group-mode-create")?.addEventListener("change", (event) => {
