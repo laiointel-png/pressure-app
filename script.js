@@ -67,6 +67,7 @@ const state = {
 
 const STORAGE_KEY = "pressure.mvp.v1";
 const API_BASE_KEY = "pressureApiBase";
+const ONBOARD_DRAFT_KEY = "pressureOnboardingDraftV1";
 const LEDGER_STORAGE_KEY = "pressure.ledger.v1";
 
 function loadLedgerStore() {
@@ -955,6 +956,7 @@ function resetToDemo() {
   upsertGroup(state.group);
   state.apiBase = "";
   localStorage.removeItem(API_BASE_KEY);
+  localStorage.removeItem(ONBOARD_DRAFT_KEY);
   state.paymentSetup = false;
   state.feeDestination = "platform";
   state.onboardingMode = "setup";
@@ -966,6 +968,61 @@ function resetToDemo() {
   syncPaymentModel();
   updateHome();
   updateCamera();
+}
+
+function loadOnboardingDraft() {
+  try {
+    const raw = localStorage.getItem(ONBOARD_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+let onboardingDraftTimer = null;
+function scheduleOnboardingDraftSave() {
+  if (onboardingDraftTimer) window.clearTimeout(onboardingDraftTimer);
+  onboardingDraftTimer = window.setTimeout(() => {
+    onboardingDraftTimer = null;
+    const nameField = document.querySelector("#onboard-name");
+    const emailField = document.querySelector("#onboard-email");
+    const groupField = document.querySelector("#onboard-group-name");
+    const groupCodeField = document.querySelector("#onboard-group-code");
+    const deadlineField = document.querySelector("#onboard-deadline");
+    const feeField = document.querySelector("#onboard-fee");
+    const apiBaseField = document.querySelector("#onboard-api-base");
+    const mode = document.querySelector('input[name="onboardGroupMode"]:checked')?.value || "create";
+
+    const payload = {
+      version: 1,
+      savedAt: Date.now(),
+      mode,
+      name: String(nameField?.value || "").trim(),
+      email: String(emailField?.value || "").trim(),
+      groupName: String(groupField?.value || "").trim(),
+      groupCode: String(groupCodeField?.value || "").trim(),
+      deadline: String(deadlineField?.value || "").trim(),
+      fee: String(feeField?.value || "").trim(),
+      apiBase: normalizeApiBase(String(apiBaseField?.value || "")),
+    };
+
+    try {
+      localStorage.setItem(ONBOARD_DRAFT_KEY, JSON.stringify(payload));
+    } catch {
+      // localStorage is best-effort in some preview contexts.
+    }
+  }, 250);
+}
+
+function clearOnboardingDraft() {
+  try {
+    localStorage.removeItem(ONBOARD_DRAFT_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
@@ -991,16 +1048,19 @@ function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
   const feeField = document.querySelector("#onboard-fee");
   const apiBaseField = document.querySelector("#onboard-api-base");
 
-  if (nameField) nameField.value = state.user.name || "";
-  if (emailField) emailField.value = state.user.email || "";
-  if (groupField) groupField.value = invite?.groupPayload?.name || state.group.name || "";
-  if (groupCodeField) groupCodeField.value = invite?.join || "";
-  if (deadlineField) deadlineField.value = invite?.groupPayload?.deadline || state.group.deadline || "22:00";
-  if (feeField) feeField.value = invite?.groupPayload?.feeLabel || state.group.feeLabel || "EUR 10";
-  if (apiBaseField) apiBaseField.value = invite?.apiBase || state.apiBase || "";
+  const draft = mode === "setup" && !invite?.join ? loadOnboardingDraft() : null;
+
+  if (nameField) nameField.value = draft?.name || state.user.name || "";
+  if (emailField) emailField.value = draft?.email || state.user.email || "";
+  if (groupField) groupField.value = invite?.groupPayload?.name || draft?.groupName || state.group.name || "";
+  if (groupCodeField) groupCodeField.value = invite?.join || draft?.groupCode || "";
+  if (deadlineField) deadlineField.value = invite?.groupPayload?.deadline || draft?.deadline || state.group.deadline || "22:00";
+  if (feeField) feeField.value = invite?.groupPayload?.feeLabel || draft?.fee || state.group.feeLabel || "EUR 10";
+  if (apiBaseField) apiBaseField.value = invite?.apiBase || draft?.apiBase || state.apiBase || "";
 
   if (invite?.join) state.onboardingGroupMode = "join";
-  const prefilledApiBase = normalizeApiBase(invite?.apiBase || state.apiBase || "");
+  else if (draft?.mode === "join" || draft?.mode === "create") state.onboardingGroupMode = draft.mode;
+  const prefilledApiBase = normalizeApiBase(invite?.apiBase || draft?.apiBase || state.apiBase || "");
   setOnboardingGroupMode(state.onboardingGroupMode || "create", { focus: false });
   setApiStatus(prefilledApiBase ? "neutral" : "bad", prefilledApiBase ? "Ongetest" : "Offline");
   syncOnboardingBackendActions();
@@ -3673,9 +3733,25 @@ document.querySelector("#skip-onboarding")?.addEventListener("click", () => {
   }
 
   resetToDemo();
+  clearOnboardingDraft();
   state.onboardingComplete = true;
   persistCoreState();
   showScreen("home");
+});
+
+[
+  "#onboard-name",
+  "#onboard-email",
+  "#onboard-group-name",
+  "#onboard-group-code",
+  "#onboard-deadline",
+  "#onboard-fee",
+  "#onboard-api-base",
+].forEach((selector) => {
+  document.querySelector(selector)?.addEventListener("input", scheduleOnboardingDraftSave);
+});
+document.querySelectorAll('input[name="onboardGroupMode"]').forEach((node) => {
+  node.addEventListener("change", scheduleOnboardingDraftSave);
 });
 
 document.querySelector("#onboard-form")?.addEventListener("submit", async (event) => {
@@ -3735,6 +3811,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
     upsertGroup(state.group);
     ensureSelfMemberLocal();
     state.onboardingComplete = true;
+    clearOnboardingDraft();
     persistCoreState();
     syncGroupUI();
     syncUserUI();
