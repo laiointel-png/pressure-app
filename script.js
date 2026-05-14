@@ -1910,6 +1910,65 @@ async function openCustomerPortal() {
   }
 }
 
+async function syncStripeIdsFromEmail() {
+  if (!state.apiBase) {
+    showSheet({
+      label: "Stripe",
+      title: "Geen API base ingesteld",
+      message: "Zet in onboarding een backend URL om Stripe IDs te syncen.",
+    });
+    return;
+  }
+
+  const email = (state.user.email || "").trim();
+  if (!email) {
+    showSheet({
+      label: "Stripe",
+      title: "Geen email bekend",
+      message: "Vul een email in bij Profiel of onboarding zodat we je Stripe customer kunnen opzoeken.",
+    });
+    return;
+  }
+
+  const button = document.querySelector("#billing-sync-stripe");
+  if (button instanceof HTMLButtonElement) {
+    button.disabled = true;
+    button.textContent = "Syncen...";
+  }
+
+  try {
+    const payload = await api.get(`/api/payments/customer-lookup?email=${encodeURIComponent(email)}`);
+    const customerId = String(payload?.customer_id || "").trim();
+    const subscriptionId = String(payload?.subscription_id || "").trim();
+
+    if (customerId) state.stripeCustomerId = customerId;
+    if (subscriptionId) state.stripeSubscriptionId = subscriptionId;
+
+    persistCoreState();
+    syncPaymentModel();
+    upsertProfileToBackend({ silent: true });
+
+    showSheet({
+      label: payload?.mode === "stripe" ? "Stripe" : "Demo",
+      title: customerId ? "Stripe IDs gesynced" : "Geen Stripe customer gevonden",
+      message: customerId
+        ? `Customer: ${customerId}${subscriptionId ? ` • Sub: ${subscriptionId}` : ""}.`
+        : "Controleer of je checkout met hetzelfde email adres is afgerond.",
+    });
+  } catch {
+    showSheet({
+      label: "Stripe",
+      title: "Sync mislukt",
+      message: "Backend niet bereikbaar of endpoint faalde. Probeer opnieuw na een health check.",
+    });
+  } finally {
+    if (button instanceof HTMLButtonElement) {
+      button.disabled = false;
+      button.textContent = "Sync Stripe IDs via email";
+    }
+  }
+}
+
 function syncCreateScreenUI() {
   const createNewToggle = document.querySelector("#create-new-toggle");
   const title = document.querySelector("#create-title");
@@ -3459,6 +3518,7 @@ document.querySelector("#billing-help").addEventListener("click", () => {
       "Cashprijzen kunnen gambling/payment review triggeren. Daarom start de beta met abonnement, platform fee en transparante ledger zonder cash-out.",
   });
 });
+document.querySelector("#billing-sync-stripe")?.addEventListener("click", () => syncStripeIdsFromEmail());
 document.querySelector("#billing-check-stripe")?.addEventListener("click", () => checkStripeHealth());
 document.querySelector("#setup-payment").addEventListener("click", setupPaymentPermission);
 document.querySelector("#setup-mandate")?.addEventListener("click", setupMandate);

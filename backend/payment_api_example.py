@@ -105,6 +105,36 @@ def demo_response(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
         **payload,
     }
 
+
+def _first_stripe_customer_id_for_email(email: str) -> str:
+    if not stripe_client_ready():
+        return ""
+    candidate = (email or "").strip()
+    if not candidate:
+        return ""
+    customers = stripe.Customer.list(email=candidate, limit=1)
+    data = customers.get("data") if isinstance(customers, dict) else []
+    if not data:
+        return ""
+    return str(data[0].get("id") or "").strip()
+
+
+def _first_active_subscription_id(customer_id: str) -> str:
+    if not stripe_client_ready():
+        return ""
+    cid = (customer_id or "").strip()
+    if not cid:
+        return ""
+    subs = stripe.Subscription.list(customer=cid, status="all", limit=10)
+    data = subs.get("data") if isinstance(subs, dict) else []
+    for sub in data:
+        status = str(sub.get("status") or "")
+        if status in {"active", "trialing", "past_due", "unpaid"}:
+            return str(sub.get("id") or "").strip()
+    if data:
+        return str(data[0].get("id") or "").strip()
+    return ""
+
 def _safe_return_url(raw: str) -> str:
     candidate = (raw or "").strip()
     if not candidate:
@@ -282,6 +312,29 @@ def open_customer_portal(payload: PortalRequest) -> dict[str, Any]:
         return_url=_safe_return_url(payload.return_url),
     )
     return {"mode": "stripe", "portal_url": session.url, "customer_id": customer_id}
+
+
+@router.get("/api/payments/customer-lookup")
+def lookup_customer(email: str = "") -> dict[str, Any]:
+    """Best-effort helper for the frontend to re-hydrate Stripe IDs after checkout/setup.
+
+    Intentionally read-only: does not create customers/subscriptions.
+    """
+    candidate = (email or "").strip()
+    if not stripe_client_ready():
+        return demo_response(
+            "customer_lookup",
+            {"email": candidate, "customer_id": "", "subscription_id": ""},
+        )
+
+    customer_id = _first_stripe_customer_id_for_email(candidate)
+    subscription_id = _first_active_subscription_id(customer_id) if customer_id else ""
+    return {
+        "mode": "stripe",
+        "email": candidate,
+        "customer_id": customer_id,
+        "subscription_id": subscription_id,
+    }
 
 
 @router.post("/api/payments/setup-mandate")
