@@ -610,6 +610,9 @@ const api = {
       body: JSON.stringify(body),
     });
   },
+  delete(path) {
+    return this.request(path, { method: "DELETE" });
+  },
   get(path) {
     return this.request(path, { method: "GET" });
   },
@@ -1913,6 +1916,7 @@ function syncCreateScreenUI() {
   const label = document.querySelector("#screen-create .create-hero .section-label");
   const headline = document.querySelector("#screen-create .create-hero h1");
   const submit = document.querySelector('#create-group-form button[type="submit"]');
+  const deleteButton = document.querySelector("#create-delete-group");
   const creatingNew = Boolean(createNewToggle?.checked);
 
   if (creatingNew && !state.createDraftGroupId) state.createDraftGroupId = newId("group");
@@ -1928,7 +1932,76 @@ function syncCreateScreenUI() {
   if (label) label.textContent = creatingNew ? "Nieuwe groep" : "Bewerk groep";
   if (headline) headline.textContent = creatingNew ? "Maak de regels eerst duidelijk." : "Update de regels voor je groep.";
   if (submit) submit.textContent = creatingNew ? "Maak groep live" : "Sla wijzigingen op";
+  if (deleteButton) deleteButton.classList.toggle("hidden", creatingNew);
   syncInviteLinkUI();
+}
+
+function deleteGroupLocal(groupId) {
+  const id = String(groupId || "").trim();
+  if (!id) return false;
+
+  if (state.groups?.[id]) delete state.groups[id];
+  if (state.membersByGroup?.[id]) delete state.membersByGroup[id];
+
+  const ledgerStore = loadLedgerStore();
+  if (ledgerStore && typeof ledgerStore === "object" && ledgerStore[id]) {
+    const next = { ...ledgerStore };
+    delete next[id];
+    try {
+      localStorage.setItem(LEDGER_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // ignore quota
+    }
+  }
+
+  if (state.activeGroupId === id) {
+    const fallback = sortedGroups()[0]?.id;
+    if (fallback) {
+      state.activeGroupId = fallback;
+      state.group = { ...state.group, ...state.groups[fallback], id: fallback };
+    } else {
+      state.group = {
+        ...state.group,
+        id: newId("group"),
+        name: "Nieuwe groep",
+        deadline: "22:00",
+        feeLabel: "EUR 10",
+        destinationLabel: "Platform fee, geen cash-out",
+        membersCount: 1,
+      };
+      state.activeGroupId = state.group.id;
+      state.groups = { [state.group.id]: state.group };
+    }
+  }
+
+  persistCoreState();
+  syncGroupUI();
+  syncLedgerUI();
+  renderGroupSelector();
+  updateInvitePreview();
+  updateHome();
+  updateCamera();
+  syncGroupSyncPill();
+  return true;
+}
+
+async function deleteGroupFromBackend(groupId, { silent = true } = {}) {
+  if (!state.apiBase) return false;
+  const id = String(groupId || "").trim();
+  if (!id) return false;
+  try {
+    await api.delete(`/api/groups/${encodeURIComponent(id)}`);
+    return true;
+  } catch {
+    if (!silent) {
+      showSheet({
+        label: "Backend",
+        title: "Delete failed",
+        message: "Backend endpoint is niet bereikbaar of gaf een error. Group is lokaal verwijderd.",
+      });
+    }
+    return false;
+  }
 }
 
 function updateCamera() {
@@ -3478,6 +3551,30 @@ document.querySelector("#create-group-form").addEventListener("submit", async (e
       : "Invite link, regels en betaalmodel staan klaar. Koppel later een backend voor sync.",
     primary: "Open groep",
     onPrimary: () => showScreen("group"),
+  });
+});
+
+document.querySelector("#create-delete-group")?.addEventListener("click", () => {
+  const groupId = state.group?.id;
+  const groupName = state.group?.name || "Deze groep";
+  showSheet({
+    label: "Groep verwijderen",
+    title: `Verwijder ${groupName}?`,
+    message:
+      "Dit verwijdert de groep uit local storage. Als je een backend hebt gekoppeld proberen we ook `/api/groups/:id` te verwijderen (members, checkins, invites, ledger).",
+    primary: "Verwijder",
+    secondary: "Annuleer",
+    danger: true,
+    onPrimary: async () => {
+      deleteGroupLocal(groupId);
+      await deleteGroupFromBackend(groupId, { silent: true });
+      showScreen("home");
+      showSheet({
+        label: "Verwijderd",
+        title: "Groep verwijderd",
+        message: state.apiBase ? "Lokaal verwijderd + backend delete best-effort." : "Lokaal verwijderd.",
+      });
+    },
   });
 });
 

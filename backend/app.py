@@ -62,7 +62,7 @@ app.add_middleware(
     allow_origins=[*_default_origins, *_extra_origins],
     allow_origin_regex=r"https://.*\.github\.io$",
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -143,6 +143,43 @@ def upsert_groups_bulk(payload: GroupBulkPayload) -> dict[str, Any]:
 
     _write_json(GROUPS_PATH, groups)
     return {"upserted": len(upserted), "groups": upserted}
+
+
+@app.delete("/api/groups/{group_id}")
+def delete_group(group_id: str) -> dict[str, Any]:
+    group_id = (group_id or "").strip()
+    if not group_id:
+        raise HTTPException(status_code=400, detail="missing_group_id")
+
+    groups = _read_json(GROUPS_PATH, default={})
+    if not isinstance(groups, dict) or group_id not in groups:
+        raise HTTPException(status_code=404, detail="group_not_found")
+
+    del groups[group_id]
+    _write_json(GROUPS_PATH, groups)
+
+    members = _read_json(MEMBERS_PATH, default={})
+    if isinstance(members, dict) and group_id in members:
+        del members[group_id]
+        _write_json(MEMBERS_PATH, members)
+
+    checkins = _read_json(CHECKINS_PATH, default={})
+    if isinstance(checkins, dict) and group_id in checkins:
+        del checkins[group_id]
+        _write_json(CHECKINS_PATH, checkins)
+
+    invites = _read_json(INVITES_PATH, default={})
+    if isinstance(invites, dict):
+        next_invites = {code: gid for code, gid in invites.items() if gid != group_id}
+        if next_invites != invites:
+            _write_json(INVITES_PATH, next_invites)
+
+    ledger = _read_ledger()
+    next_ledger = [entry for entry in ledger if entry.get("group_id") != group_id]
+    if next_ledger != ledger:
+        _write_json(LEDGER_PATH, next_ledger)
+
+    return {"ok": True, "deleted": group_id}
 
 
 class CheckinPayload(BaseModel):
