@@ -395,6 +395,30 @@
                 <em>Wacht</em>
               </article>
             </div>
+            <form class="member-add" id="member-add-form" aria-labelledby="member-add-title">
+              <div class="section-title row compact">
+                <div>
+                  <span class="section-label">Leden</span>
+                  <h2 id="member-add-title">Voeg iemand toe</h2>
+                </div>
+              </div>
+              <div class="form-row">
+                <label class="flex-field" for="member-add-name">
+                  <span class="sr-only">Naam van nieuw lid</span>
+                  <input
+                    id="member-add-name"
+                    type="text"
+                    autocomplete="off"
+                    inputmode="text"
+                    placeholder="Naam (bijv. Mila)"
+                    aria-describedby="member-add-hint"
+                    required
+                  />
+                </label>
+                <button class="secondary-button" id="member-add-submit" type="submit">Toevoegen</button>
+              </div>
+              <small class="field-hint" id="member-add-hint">Slaat lokaal op; met backend wordt het ook gesynct naar `/api/members`.</small>
+            </form>
           </section>
 
 	          <section class="content-card rule-card">

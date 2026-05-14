@@ -1007,6 +1007,16 @@ svg {
   margin-top: 12px;
 }
 
+.member-add {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.member-add .section-title {
+  margin-top: 0;
+}
+
 .file-input {
   width: 100%;
   min-height: 46px;

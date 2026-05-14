@@ -3518,6 +3518,61 @@ document.querySelector("#group-selector-new")?.addEventListener("click", () => {
   showScreen("create");
   document.querySelector("#group-name-input")?.focus();
 });
+
+document.querySelector("#member-add-form")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = document.querySelector("#member-add-name");
+  const submit = document.querySelector("#member-add-submit");
+  const name = input?.value?.trim?.() || "";
+  if (!name) {
+    input?.focus?.();
+    return;
+  }
+  const userId = newId("user");
+  const member = {
+    groupId: state.group.id,
+    userId,
+    displayName: name,
+    initial: initialFromName(name),
+  };
+
+  if (submit instanceof HTMLButtonElement) {
+    submit.disabled = true;
+    submit.textContent = "Opslaan...";
+  }
+
+  try {
+    upsertMemberLocal(member);
+    upsertGroup({ ...state.group, membersCount: currentGroupMembers().length });
+    persistCoreState();
+    syncGroupUI();
+    renderMemberList([]);
+
+    if (state.apiBase) {
+      await upsertMemberToBackend(member, { silent: true });
+      await syncMembersFromBackend({ silent: true });
+    }
+
+    if (input instanceof HTMLInputElement) input.value = "";
+    showSheet({
+      label: "Lid",
+      title: "Lid toegevoegd",
+      message: state.apiBase ? "Opgeslagen + naar backend gesynct." : "Opgeslagen in local storage.",
+    });
+  } catch {
+    showSheet({
+      label: "Lid",
+      title: "Toevoegen mislukt",
+      message: "Local save ging goed, maar backend sync faalde. Check API base + CORS.",
+    });
+  } finally {
+    if (submit instanceof HTMLButtonElement) {
+      submit.disabled = false;
+      submit.textContent = "Toevoegen";
+    }
+  }
+});
+
 document.querySelector("#group-edit-current")?.addEventListener("click", () => {
   const toggle = document.querySelector("#create-new-toggle");
   if (toggle) toggle.checked = false;
