@@ -3455,6 +3455,8 @@ document.querySelector("#create-group-form").addEventListener("submit", async (e
   if (state.apiBase) {
     await saveGroupToBackend(state.group, { silent: true });
     await ensureInviteCodeFromBackend(state.group.id, { silent: true });
+    syncInviteLinkUI();
+    updateInvitePreview();
     await upsertMemberToBackend(
       {
         groupId: state.group.id,
@@ -3819,6 +3821,8 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
     if (state.onboardingGroupMode === "create") {
       await saveGroupToBackend(state.group, { silent: true });
       await ensureInviteCodeFromBackend(state.group.id, { silent: true });
+      syncInviteLinkUI();
+      updateInvitePreview();
     }
     if (state.apiBase) {
       await upsertProfileToBackend({ silent: true });
