@@ -61,6 +61,7 @@ const state = {
   paymentMandateSetup: false,
   createDraftGroupId: "",
   createDraftJoinCode: "",
+  createDraftHydrated: false,
   inviteGroupPayload: null,
   apiStatusKind: "bad",
 };
@@ -68,7 +69,40 @@ const state = {
 const STORAGE_KEY = "pressure.mvp.v1";
 const API_BASE_KEY = "pressureApiBase";
 const ONBOARD_DRAFT_KEY = "pressureOnboardingDraftV1";
+const CREATE_DRAFT_KEY = "pressureCreateDraftV1";
 const LEDGER_STORAGE_KEY = "pressure.ledger.v1";
+
+function loadCreateDraft() {
+  try {
+    const raw = localStorage.getItem(CREATE_DRAFT_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      name: String(parsed.name || "").trim(),
+      deadline: String(parsed.deadline || "").trim(),
+      feeLabel: String(parsed.feeLabel || "").trim(),
+      destinationLabel: String(parsed.destinationLabel || "").trim(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearCreateDraft() {
+  try {
+    localStorage.removeItem(CREATE_DRAFT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function saveCreateDraft(payload) {
+  try {
+    localStorage.setItem(CREATE_DRAFT_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore quota
+  }
+}
 
 function loadLedgerStore() {
   try {
@@ -1985,6 +2019,25 @@ function syncCreateScreenUI() {
   if (!creatingNew) {
     state.createDraftGroupId = "";
     state.createDraftJoinCode = "";
+    state.createDraftHydrated = false;
+    clearCreateDraft();
+  }
+
+  if (creatingNew && !state.createDraftHydrated) {
+    const draft = loadCreateDraft();
+    const nameField = document.querySelector("#group-name-input");
+    const deadlineField = document.querySelector("#deadline-input");
+    const feeField = document.querySelector("#fee-input");
+    const destinationField = document.querySelector("#destination-input");
+
+    if (draft) {
+      if (nameField instanceof HTMLInputElement && draft.name) nameField.value = draft.name;
+      if (deadlineField instanceof HTMLSelectElement && draft.deadline) deadlineField.value = draft.deadline;
+      if (feeField instanceof HTMLSelectElement && draft.feeLabel) feeField.value = draft.feeLabel;
+      if (destinationField instanceof HTMLSelectElement && draft.destinationLabel) destinationField.value = draft.destinationLabel;
+    }
+
+    state.createDraftHydrated = true;
   }
 
   if (title) title.textContent = creatingNew ? "Groep maken" : "Groep bewerken";
@@ -3568,6 +3621,8 @@ document.querySelector("#create-group-form").addEventListener("submit", async (e
     state.activeGroupId = state.group.id;
     state.createDraftGroupId = "";
     state.createDraftJoinCode = "";
+    state.createDraftHydrated = false;
+    clearCreateDraft();
   }
 
   state.group = {
@@ -3754,6 +3809,28 @@ document.querySelector("#group-sync")?.addEventListener("click", async () => {
 document.querySelectorAll("#group-name-input, #deadline-input, #fee-input, #destination-input").forEach((field) => {
   field.addEventListener("input", updateInvitePreview);
   field.addEventListener("change", updateInvitePreview);
+});
+
+let createDraftTimer = null;
+function scheduleCreateDraftSave() {
+  const creatingNew = Boolean(document.querySelector("#create-new-toggle")?.checked);
+  if (!creatingNew) return;
+  if (createDraftTimer) window.clearTimeout(createDraftTimer);
+  createDraftTimer = window.setTimeout(() => {
+    createDraftTimer = null;
+    const name = document.querySelector("#group-name-input")?.value?.trim() || "";
+    const deadline = document.querySelector("#deadline-input")?.value || "";
+    const feeLabel = document.querySelector("#fee-input")?.value || "";
+    const destinationLabel = document.querySelector("#destination-input")?.value || "";
+    saveCreateDraft({ name, deadline, feeLabel, destinationLabel, savedAt: Date.now() });
+  }, 300);
+}
+
+["#group-name-input", "#deadline-input", "#fee-input", "#destination-input"].forEach((selector) => {
+  const field = document.querySelector(selector);
+  if (!field) return;
+  field.addEventListener("input", scheduleCreateDraftSave);
+  field.addEventListener("change", scheduleCreateDraftSave);
 });
 
 document.querySelector("#create-new-toggle")?.addEventListener("change", () => {
