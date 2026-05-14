@@ -634,6 +634,31 @@
             <p>Abonnement voor de app. Miss fees zijn platform fees, geen pot en geen cashprijs voor winnaars.</p>
             <button class="secondary-button" id="payment-button" type="button">Open betaalmodel</button>
           </section>
+
+          <section class="content-card rule-card" aria-labelledby="profile-backend-title">
+            <span class="section-label">Backend</span>
+            <h2 id="profile-backend-title">Sync & billing verbinden</h2>
+            <p>Gebruik een API base om groups, leden, check-ins en Stripe demo endpoints te syncen.</p>
+            <label>
+              <span>API base</span>
+              <input
+                id="profile-api-base"
+                type="url"
+                inputmode="url"
+                autocomplete="off"
+                placeholder="http://localhost:8001"
+              />
+            </label>
+            <div class="onboard-row tight" aria-label="Backend acties">
+              <button class="secondary-button full-width" id="profile-api-test" type="button">Test backend</button>
+              <span class="small-pill neutral" id="profile-api-pill" aria-label="Backend status">Local</span>
+            </div>
+            <div class="onboard-row tight">
+              <button class="secondary-button full-width" id="profile-api-sync" type="button">Sync nu</button>
+              <button class="text-button full-width" id="profile-open-onboarding" type="button">Open onboarding editor</button>
+            </div>
+            <small class="field-hint">Tip: op GitHub Pages draait alleen de frontend; gebruik een aparte backend host voor echte calls.</small>
+          </section>
         </section>
 
         <section class="screen" id="screen-billing" aria-labelledby="billing-title" tabindex="-1">

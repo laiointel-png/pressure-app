@@ -625,6 +625,31 @@ function setApiStatus(kind, label) {
   syncOnboardingBillingActions();
 }
 
+function setProfileApiStatus(kind, label) {
+  const pill = document.querySelector("#profile-api-pill");
+  if (!pill) return;
+  pill.classList.remove("ok", "bad", "neutral");
+  pill.classList.add(kind);
+  pill.textContent = label;
+}
+
+function syncProfileBackendCard() {
+  const field = document.querySelector("#profile-api-base");
+  if (field instanceof HTMLInputElement) field.value = state.apiBase || "";
+
+  if (!state.apiBase) {
+    setProfileApiStatus("neutral", "Local");
+    return;
+  }
+
+  const last = Math.max(state.lastBackendSyncAt || 0, state.lastBackendGroupSaveAt || 0, state.lastBackendCheckinAt || 0);
+  if (last) {
+    setProfileApiStatus("ok", `Synced ${formatShortTime(last)}`);
+    return;
+  }
+  setProfileApiStatus("neutral", "Ongetest");
+}
+
 function syncOnboardingBackendActions() {
   const container = document.querySelector("#onboard-backend-actions");
   if (!container) return;
@@ -1041,6 +1066,8 @@ function showScreen(name) {
   setLiveStatus(`${name} geopend`);
 
   if (name === "camera") startVision();
+  if (name === "profile") syncUserUI();
+  if (name === "profile") syncProfileBackendCard();
   if (name === "billing") checkStripeHealth({ silent: true });
   if (name === "billing") syncLedgerFromBackend({ silent: true });
   if (name === "create") syncCreateScreenUI();
@@ -3235,6 +3262,59 @@ document.querySelector("#settings-button").addEventListener("click", () => {
 
 document.querySelector("#payment-button").addEventListener("click", () => {
   showScreen("billing");
+});
+
+document.querySelector("#profile-open-onboarding")?.addEventListener("click", () => {
+  enterOnboarding({ mode: "edit", returnTo: "profile" });
+});
+
+document.querySelector("#profile-api-test")?.addEventListener("click", async () => {
+  const field = document.querySelector("#profile-api-base");
+  const base = normalizeApiBase(field?.value || "");
+
+  if (!base) {
+    state.apiBase = "";
+    localStorage.removeItem(API_BASE_KEY);
+    persistCoreState();
+    syncProfileBackendCard();
+    showSheet({ label: "Backend", title: "API base leeg", message: "Zonder backend blijft alles local-only." });
+    return;
+  }
+
+  state.apiBase = base;
+  localStorage.setItem(API_BASE_KEY, base);
+  persistCoreState();
+  syncProfileBackendCard();
+  setProfileApiStatus("neutral", "Test...");
+
+  await testApiConnection(base, { silent: true });
+  await checkStripeHealth({ silent: true });
+
+  syncProfileBackendCard();
+  showSheet({
+    label: "Backend",
+    title: "Backend gecheckt",
+    message: "Health checks uitgevoerd. Zie status pills in onboarding/billing.",
+  });
+});
+
+document.querySelector("#profile-api-sync")?.addEventListener("click", async () => {
+  if (!state.apiBase) {
+    showSheet({
+      label: "Sync",
+      title: "Geen API base ingesteld",
+      message: "Vul eerst een backend URL in (bijv. http://localhost:8001).",
+    });
+    return;
+  }
+  setProfileApiStatus("neutral", "Sync...");
+  await bootstrapBackendSync();
+  syncProfileBackendCard();
+  showSheet({
+    label: "Sync",
+    title: "Backend sync klaar",
+    message: "Groups, leden, check-ins en ledger zijn geüpdatet (best-effort).",
+  });
 });
 
 document.querySelector("#billing-back").addEventListener("click", () => showScreen("profile"));
