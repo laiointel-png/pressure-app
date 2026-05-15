@@ -265,6 +265,45 @@ def upsert_member(payload: MemberPayload) -> dict[str, Any]:
     return {"member": record}
 
 
+class MemberBulkPayload(BaseModel):
+    group_id: str
+    members: list[MemberPayload] = []
+
+
+@app.post("/api/members/bulk")
+def upsert_members_bulk(payload: MemberBulkPayload) -> dict[str, Any]:
+    group_id = (payload.group_id or "").strip()
+    if not group_id:
+        raise HTTPException(status_code=400, detail="missing_group_id")
+
+    members_store = _read_json(MEMBERS_PATH, default={})
+    group_bucket = members_store.setdefault(group_id, {})
+    if not isinstance(group_bucket, dict):
+        group_bucket = {}
+        members_store[group_id] = group_bucket
+
+    upserted = 0
+    for member in payload.members or []:
+        if not member:
+            continue
+        if (member.group_id or "").strip() and member.group_id != group_id:
+            continue
+        user_id = (member.user_id or "").strip()
+        if not user_id:
+            continue
+        record = {
+            "group_id": group_id,
+            "user_id": user_id,
+            "display_name": member.display_name or "Lid",
+            "initial": member.initial or "Y",
+        }
+        group_bucket[user_id] = record
+        upserted += 1
+
+    _write_json(MEMBERS_PATH, members_store)
+    return {"group_id": group_id, "upserted": upserted}
+
+
 class ProfilePayload(BaseModel):
     user_id: str
     name: str = ""

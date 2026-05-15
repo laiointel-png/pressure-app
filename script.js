@@ -706,6 +706,18 @@ function syncOnboardingBackendActions() {
     uploadButton.disabled = !enabled;
     uploadButton.setAttribute("aria-disabled", uploadButton.disabled ? "true" : "false");
   }
+
+  const syncMembersButton = document.querySelector("#onboard-sync-members");
+  if (syncMembersButton instanceof HTMLButtonElement) {
+    syncMembersButton.disabled = !enabled;
+    syncMembersButton.setAttribute("aria-disabled", syncMembersButton.disabled ? "true" : "false");
+  }
+
+  const uploadMembersButton = document.querySelector("#onboard-upload-members");
+  if (uploadMembersButton instanceof HTMLButtonElement) {
+    uploadMembersButton.disabled = !enabled;
+    uploadMembersButton.setAttribute("aria-disabled", uploadMembersButton.disabled ? "true" : "false");
+  }
 }
 
 function syncOnboardingBillingActions() {
@@ -3285,6 +3297,77 @@ async function pushLocalGroupsToBackend({ silent = false } = {}) {
   return { uploaded, failed };
 }
 
+function buildMembersBulkPayloadForGroup(groupId) {
+  const bucket = state.membersByGroup?.[groupId];
+  if (!bucket || typeof bucket !== "object") return [];
+  return Object.values(bucket)
+    .map(normalizeMember)
+    .filter(Boolean)
+    .map((member) => ({
+      group_id: groupId,
+      user_id: member.userId,
+      display_name: member.displayName,
+      initial: member.initial,
+    }));
+}
+
+async function pushLocalMembersToBackend({ silent = false } = {}) {
+  if (!state.apiBase) {
+    if (silent) return { uploaded: 0, failed: 0 };
+    showSheet({
+      label: "Sync",
+      title: "Geen API base ingesteld",
+      message: "Zet in onboarding een backend URL om leden te uploaden.",
+    });
+    return { uploaded: 0, failed: 0 };
+  }
+
+  const groups = sortedGroups();
+  if (!groups.length) return { uploaded: 0, failed: 0 };
+
+  let uploaded = 0;
+  let failed = 0;
+  for (const group of groups) {
+    const groupId = String(group?.id || "").trim();
+    if (!groupId) continue;
+    const members = buildMembersBulkPayloadForGroup(groupId);
+    if (!members.length) continue;
+
+    try {
+      const payload = await api.post("/api/members/bulk", { group_id: groupId, members });
+      uploaded += Number(payload?.upserted || 0) || members.length;
+    } catch {
+      // Older backend: fall back to per-member writes.
+      for (const member of members) {
+        const ok = await upsertMemberToBackend(
+          {
+            groupId: groupId,
+            userId: member.user_id,
+            displayName: member.display_name,
+            initial: member.initial,
+          },
+          { silent: true },
+        );
+        if (ok) uploaded += 1;
+        else failed += 1;
+      }
+    }
+  }
+
+  if (!silent) {
+    showSheet({
+      label: "Sync",
+      title: "Leden geüpload",
+      message: `Uploaded ${uploaded}. Failed ${failed}.`,
+    });
+  }
+
+  state.lastBackendSyncAt = Date.now();
+  persistCoreState();
+  syncGroupSyncPill();
+  return { uploaded, failed };
+}
+
 function normalizeImportedGroup(raw) {
   if (!raw) return null;
   const id = String(raw.id || raw.group_id || "").trim();
@@ -3930,6 +4013,24 @@ document.querySelector("#onboard-upload-groups")?.addEventListener("click", asyn
     localStorage.setItem(API_BASE_KEY, base);
   }
   await pushLocalGroupsToBackend({ silent: false });
+});
+
+document.querySelector("#onboard-sync-members")?.addEventListener("click", async () => {
+  const base = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+  if (base) {
+    state.apiBase = base;
+    localStorage.setItem(API_BASE_KEY, base);
+  }
+  await syncMembersFromBackend({ silent: false });
+});
+
+document.querySelector("#onboard-upload-members")?.addEventListener("click", async () => {
+  const base = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+  if (base) {
+    state.apiBase = base;
+    localStorage.setItem(API_BASE_KEY, base);
+  }
+  await pushLocalMembersToBackend({ silent: false });
 });
 
 document.querySelector("#onboard-group-mode-create")?.addEventListener("change", (event) => {
