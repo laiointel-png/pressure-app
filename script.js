@@ -4293,6 +4293,22 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
   apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
   const invitePayload = hydrated?.groupPayload || state.inviteGroupPayload;
 
+  if (apiBase && !email) {
+    showSheet({
+      label: "Profiel",
+      title: "Email ontbreekt (aanrader)",
+      message:
+        "Met een backend kun je zonder email nog steeds groups syncen, maar billing/Stripe re-hydrate (customer lookup + portal) werkt beter met email. Je kunt ook later in Profiel aanpassen.",
+      primary: "Toch doorgaan",
+      secondary: "Email invullen",
+      onSecondary: () => {
+        const field = document.querySelector("#onboard-email");
+        if (field instanceof HTMLElement) field.focus();
+      },
+    });
+    return;
+  }
+
   state.user = {
     ...state.user,
     name,
@@ -4324,6 +4340,8 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
   ensureIds();
 
   const finalize = async () => {
+    const shouldOfferBillingSetup =
+      state.onboardingMode !== "edit" && Boolean(state.apiBase) && Boolean(state.user?.email) && !state.paymentMandateSetup;
     if (state.onboardingGroupMode === "create" && !state.apiBase && !String(state.group.joinCode || "").trim()) {
       state.group.joinCode = localJoinCodeFromGroupId(state.group.id);
     }
@@ -4356,12 +4374,26 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
     }
     if (state.apiBase) pushLocalGroupsToBackend({ silent: true });
     if (state.apiBase) {
-      testApiConnection(state.apiBase, { silent: true });
-      checkStripeHealth({ silent: true });
+      await testApiConnection(state.apiBase, { silent: true });
+      await checkStripeHealth({ silent: true });
     }
     updateHome();
     updateCamera();
     showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
+
+    if (shouldOfferBillingSetup && state.stripeReady && !state.paymentMandateSetup) {
+      window.setTimeout(() => {
+        showSheet({
+          label: "Billing",
+          title: "Sla nu een payment method op",
+          message:
+            "Met een mandate kan de backend later miss fees off-session chargen. Dit opent Stripe setup (test) in een nieuw tabblad.",
+          primary: "Open billing",
+          secondary: "Later",
+          onPrimary: () => showScreen("billing"),
+        });
+      }, 50);
+    }
   };
 
   if (mode === "join") {
