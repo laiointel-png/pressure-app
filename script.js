@@ -1178,6 +1178,7 @@ function showScreen(name) {
   if (name === "profile") syncUserUI();
   if (name === "profile") syncProfileBackendCard();
   if (name === "billing") checkStripeHealth({ silent: true });
+  if (name === "billing") bootstrapBillingScreen();
   if (name === "billing") syncLedgerFromBackend({ silent: true });
   if (name === "create") syncCreateScreenUI();
   if (name === "rank") renderLeaderboard();
@@ -1194,6 +1195,32 @@ function showScreen(name) {
 
   const frame = document.querySelector(".device-frame");
   if (frame) frame.classList.toggle("onboarding", name === "onboard");
+}
+
+let billingBootstrapTimer = null;
+let lastBillingBootstrapAt = 0;
+function bootstrapBillingScreen({ force = false } = {}) {
+  if (!state.apiBase) return;
+  if (!state.user?.email) return;
+  const now = Date.now();
+  if (!force && now - lastBillingBootstrapAt < 60_000) return;
+  lastBillingBootstrapAt = now;
+
+  if (billingBootstrapTimer) window.clearTimeout(billingBootstrapTimer);
+  billingBootstrapTimer = window.setTimeout(async () => {
+    billingBootstrapTimer = null;
+    try {
+      const needsStripeRehydrate = !(state.stripeCustomerId || state.stripeSubscriptionId || state.stripePaymentMethodId);
+      await syncProfileFromBackend({ silent: true });
+      if (needsStripeRehydrate) {
+        await syncStripeIdsFromEmail({ silent: true });
+        await syncProfileFromBackend({ silent: true });
+      }
+      syncPaymentModel();
+    } catch {
+      // Silent bootstrap; billing stays demo/local-first.
+    }
+  }, 50);
 }
 
 async function checkStripeHealth({ silent = false } = {}) {
