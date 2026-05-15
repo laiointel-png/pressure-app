@@ -1956,27 +1956,31 @@ async function openCustomerPortal() {
   }
 }
 
-async function syncStripeIdsFromEmail() {
+async function syncStripeIdsFromEmail({ silent = false } = {}) {
   if (!state.apiBase) {
-    showSheet({
-      label: "Stripe",
-      title: "Geen API base ingesteld",
-      message: "Zet in onboarding een backend URL om Stripe IDs te syncen.",
-    });
-    return;
+    if (!silent) {
+      showSheet({
+        label: "Stripe",
+        title: "Geen API base ingesteld",
+        message: "Zet in onboarding een backend URL om Stripe IDs te syncen.",
+      });
+    }
+    return null;
   }
 
   const email = (state.user.email || "").trim();
   if (!email) {
-    showSheet({
-      label: "Stripe",
-      title: "Geen email bekend",
-      message: "Vul een email in bij Profiel of onboarding zodat we je Stripe customer kunnen opzoeken.",
-    });
-    return;
+    if (!silent) {
+      showSheet({
+        label: "Stripe",
+        title: "Geen email bekend",
+        message: "Vul een email in bij Profiel of onboarding zodat we je Stripe customer kunnen opzoeken.",
+      });
+    }
+    return null;
   }
 
-  const button = document.querySelector("#billing-sync-stripe");
+  const button = silent ? null : document.querySelector("#billing-sync-stripe");
   if (button instanceof HTMLButtonElement) {
     button.disabled = true;
     button.textContent = "Syncen...";
@@ -1994,19 +1998,26 @@ async function syncStripeIdsFromEmail() {
     syncPaymentModel();
     upsertProfileToBackend({ silent: true });
 
-    showSheet({
-      label: payload?.mode === "stripe" ? "Stripe" : "Demo",
-      title: customerId ? "Stripe IDs gesynced" : "Geen Stripe customer gevonden",
-      message: customerId
-        ? `Customer: ${customerId}${subscriptionId ? ` • Sub: ${subscriptionId}` : ""}.`
-        : "Controleer of je checkout met hetzelfde email adres is afgerond.",
-    });
+    if (!silent) {
+      showSheet({
+        label: payload?.mode === "stripe" ? "Stripe" : "Demo",
+        title: customerId ? "Stripe IDs gesynced" : "Geen Stripe customer gevonden",
+        message: customerId
+          ? `Customer: ${customerId}${subscriptionId ? ` • Sub: ${subscriptionId}` : ""}.`
+          : "Controleer of je checkout met hetzelfde email adres is afgerond.",
+      });
+    }
+
+    return { customerId, subscriptionId, mode: payload?.mode || "demo" };
   } catch {
-    showSheet({
-      label: "Stripe",
-      title: "Sync mislukt",
-      message: "Backend niet bereikbaar of endpoint faalde. Probeer opnieuw na een health check.",
-    });
+    if (!silent) {
+      showSheet({
+        label: "Stripe",
+        title: "Sync mislukt",
+        message: "Backend niet bereikbaar of endpoint faalde. Probeer opnieuw na een health check.",
+      });
+    }
+    return null;
   } finally {
     if (button instanceof HTMLButtonElement) {
       button.disabled = false;
@@ -4349,6 +4360,10 @@ window.addEventListener("hashchange", () => {
 async function bootstrapBackendSync() {
   if (!state.apiBase) return;
   await syncProfileFromBackend({ silent: true });
+  const needsStripeRehydrate = Boolean(state.user?.email) && !(state.stripeCustomerId || state.stripeSubscriptionId);
+  if (needsStripeRehydrate) {
+    await syncStripeIdsFromEmail({ silent: true });
+  }
   await syncGroupsFromBackend({ silent: true });
   await syncMembersFromBackend({ silent: true });
   await syncCheckinsFromBackend({ silent: true });
