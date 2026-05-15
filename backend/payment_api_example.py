@@ -16,7 +16,9 @@ It intentionally does not implement pooled pots, wallets, or winner payouts.
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
@@ -39,6 +41,55 @@ router = APIRouter()
 # but export `router` for inclusion into `backend.app` without duplicating middleware.
 app = FastAPI(title="Pressure Payment API")
 app.include_router(router)
+
+DATA_DIR = Path(__file__).resolve().parent / "data"
+PROFILES_PATH = DATA_DIR / "profiles.json"
+
+
+def _read_json(path: Path, default: Any) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return default
+    except json.JSONDecodeError:
+        return default
+
+
+def _write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    tmp.replace(path)
+
+
+def _upsert_profile_from_stripe(
+    user_id: str,
+    *,
+    email: str = "",
+    stripe_customer_id: str = "",
+    stripe_subscription_id: str = "",
+    stripe_payment_method_id: str = "",
+) -> dict[str, Any]:
+    uid = (user_id or "").strip()
+    if not uid:
+        return {}
+
+    profiles = _read_json(PROFILES_PATH, default={})
+    if not isinstance(profiles, dict):
+        profiles = {}
+
+    current = profiles.get(uid) if isinstance(profiles.get(uid), dict) else {}
+    next_profile = {
+        "user_id": uid,
+        "name": str(current.get("name") or ""),
+        "email": str(email or current.get("email") or ""),
+        "stripe_customer_id": str(stripe_customer_id or current.get("stripe_customer_id") or ""),
+        "stripe_subscription_id": str(stripe_subscription_id or current.get("stripe_subscription_id") or ""),
+        "stripe_payment_method_id": str(stripe_payment_method_id or current.get("stripe_payment_method_id") or ""),
+    }
+    profiles[uid] = next_profile
+    _write_json(PROFILES_PATH, profiles)
+    return next_profile
 
 
 class CheckoutRequest(BaseModel):
@@ -134,6 +185,7 @@ def _first_active_subscription_id(customer_id: str) -> str:
     if data:
         return str(data[0].get("id") or "").strip()
     return ""
+
 
 def _safe_return_url(raw: str) -> str:
     candidate = (raw or "").strip()
@@ -399,4 +451,59 @@ async def stripe_webhook(request: Request) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    return {"received": True, "event_type": event["type"]}
+    event_type = str(event.get("type") or "")
+    data_object = (event.get("data") or {}).get("object") or {}
+
+    if event_type == "checkout.session.completed" and isinstance(data_object, dict):
+        metadata = data_object.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        user_id = str(metadata.get("pressure_user_id") or "").strip()
+        group_id = str(metadata.get("pressure_group_id") or "").strip()
+        session_mode = str(data_object.get("mode") or "").strip()
+        customer_id = str(data_object.get("customer") or "").strip()
+        subscription_id = str(data_object.get("subscription") or "").strip()
+
+        customer_details = data_object.get("customer_details") if isinstance(data_object.get("customer_details"), dict) else {}
+        customer_email = str(customer_details.get("email") or data_object.get("customer_email") or "").strip()
+
+        updated = {}
+        if user_id and customer_id:
+            if session_mode == "subscription":
+                updated = _upsert_profile_from_stripe(
+                    user_id,
+                    email=customer_email,
+                    stripe_customer_id=customer_id,
+                    stripe_subscription_id=subscription_id,
+                )
+            elif session_mode == "setup":
+                setup_intent_id = str(data_object.get("setup_intent") or "").strip()
+                payment_method_id = ""
+                if setup_intent_id:
+                    try:
+                        intent = stripe.SetupIntent.retrieve(setup_intent_id)
+                        payment_method_id = str(intent.get("payment_method") or "").strip()
+                    except Exception:
+                        payment_method_id = ""
+
+                updated = _upsert_profile_from_stripe(
+                    user_id,
+                    email=customer_email,
+                    stripe_customer_id=customer_id,
+                    stripe_payment_method_id=payment_method_id,
+                )
+
+        return {
+            "received": True,
+            "event_type": event_type,
+            "handled": True,
+            "session_mode": session_mode,
+            "user_id": user_id,
+            "group_id": group_id,
+            "customer_id": customer_id,
+            "subscription_id": subscription_id,
+            "profile_updated": bool(updated),
+        }
+
+    return {"received": True, "event_type": event_type, "handled": False}
