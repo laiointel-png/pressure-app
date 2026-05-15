@@ -4051,6 +4051,26 @@ document.querySelector("#onboard-group-mode-join")?.addEventListener("change", (
   if (event.target.checked) setOnboardingGroupMode("join");
 });
 
+function setOnboardingSubmitBusy(isBusy) {
+  const form = document.querySelector("#onboard-form");
+  const button = document.querySelector("#onboard-submit");
+  if (form) form.setAttribute("aria-busy", isBusy ? "true" : "false");
+  if (button instanceof HTMLButtonElement) button.disabled = Boolean(isBusy);
+}
+
+async function fetchBackendGroupByCode({ apiBase, groupCode }) {
+  if (!apiBase) throw new Error("api_base_missing");
+  if (!groupCode) throw new Error("group_code_missing");
+
+  state.apiBase = apiBase;
+  localStorage.setItem(API_BASE_KEY, apiBase);
+
+  return api
+    .get(`/api/invites/${encodeURIComponent(groupCode)}`)
+    .then((payload) => payload?.group || payload)
+    .catch(() => api.get(`/api/groups/${encodeURIComponent(groupCode)}`).then((payload) => payload?.group || payload));
+}
+
 async function previewJoinGroup() {
   let apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
   const codeField = document.querySelector("#onboard-group-code");
@@ -4099,10 +4119,7 @@ async function previewJoinGroup() {
   localStorage.setItem(API_BASE_KEY, apiBase);
 
   try {
-    const payload = await api
-      .get(`/api/invites/${encodeURIComponent(groupCode)}`)
-      .then((response) => response?.group || response)
-      .catch(() => api.get(`/api/groups/${encodeURIComponent(groupCode)}`).then((response) => response?.group || response));
+    const payload = await fetchBackendGroupByCode({ apiBase, groupCode });
     const group = normalizeBackendGroup(payload);
     if (!group) throw new Error("group_invalid");
 
@@ -4311,10 +4328,8 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
     }
 
     try {
-      const rawGroup = await api
-        .get(`/api/invites/${encodeURIComponent(groupCode)}`)
-        .then((payload) => payload?.group || payload)
-        .catch(() => api.get(`/api/groups/${encodeURIComponent(groupCode)}`).then((payload) => payload?.group || payload));
+      setOnboardingSubmitBusy(true);
+      const rawGroup = await fetchBackendGroupByCode({ apiBase: state.apiBase, groupCode });
       const group = normalizeBackendGroup(rawGroup);
       if (!group) throw new Error("group_invalid");
       state.group = { ...state.group, ...group, id: group.id, joinCode: group.joinCode || groupCode };
@@ -4325,12 +4340,15 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
         title: "Je zit nu in de group",
         message: `${state.group.name} · Deadline ${state.group.deadline}.`,
       });
-    } catch {
+    } catch (error) {
+      console.warn("join_backend_failed", error);
       showSheet({
         label: "Join",
         title: "Join mislukt",
         message: "Invite code / group id niet gevonden of backend gaf een error. Check code, backend en CORS.",
       });
+    } finally {
+      setOnboardingSubmitBusy(false);
     }
     return;
   }
