@@ -424,6 +424,19 @@ svg {
   color: var(--black);
 }
 
+.hero-actions {
+  display: grid;
+  gap: 10px;
+  justify-items: stretch;
+  min-width: 0;
+}
+
+.hero-actions .field-hint {
+  margin: 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.72);
+}
+
 .secondary-button {
   border: 1px solid var(--line-strong);
   background: #fff;

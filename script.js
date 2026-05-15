@@ -1431,6 +1431,7 @@ function syncGroupUI() {
 
   renderGroupSelector();
   syncInviteLinkUI();
+  syncGroupBackendButtonState();
 }
 
 function syncUserUI() {
@@ -3157,6 +3158,100 @@ async function saveGroupToBackend(group, { silent = true } = {}) {
   }
 }
 
+function setGroupBackendStatus(message = "") {
+  const status = document.querySelector("#group-backend-status");
+  if (!(status instanceof HTMLElement)) return;
+  status.textContent = message;
+}
+
+function syncGroupBackendButtonState() {
+  const button = document.querySelector("#sync-group-backend");
+  if (!(button instanceof HTMLButtonElement)) return;
+  const hasApi = Boolean(state.apiBase);
+  button.disabled = !hasApi;
+  button.setAttribute(
+    "aria-label",
+    hasApi ? "Sync groep en leden naar backend" : "Sync naar backend (zet eerst een API base in onboarding)",
+  );
+  if (!hasApi) setGroupBackendStatus("Zet een API base in onboarding om te syncen.");
+}
+
+async function pushCurrentGroupToBackend({ silent = false } = {}) {
+  const groupId = String(state.group?.id || "").trim();
+  if (!groupId) return { groupUploaded: false, membersUploaded: 0 };
+  if (!state.apiBase) {
+    if (!silent) {
+      showSheet({
+        label: "Sync",
+        title: "Geen API base ingesteld",
+        message: "Zet in onboarding een backend URL om te syncen.",
+      });
+    }
+    return { groupUploaded: false, membersUploaded: 0 };
+  }
+
+  const group = state.groups?.[groupId] ? { ...state.groups[groupId], id: groupId } : { ...state.group, id: groupId };
+  const groupUploaded = await saveGroupToBackend(group, { silent: true });
+  if (groupUploaded) await ensureInviteCodeFromBackend(groupId, { silent: true });
+
+  const members = buildMembersBulkPayloadForGroup(groupId);
+  let membersUploaded = 0;
+  if (members.length) {
+    try {
+      const payload = await api.post("/api/members/bulk", { group_id: groupId, members });
+      membersUploaded = Number(payload?.upserted || 0) || members.length;
+    } catch {
+      for (const member of members) {
+        const ok = await upsertMemberToBackend(
+          {
+            groupId,
+            userId: member.user_id,
+            displayName: member.display_name,
+            initial: member.initial,
+          },
+          { silent: true },
+        );
+        if (ok) membersUploaded += 1;
+      }
+    }
+  }
+
+  state.lastBackendSyncAt = Date.now();
+  persistCoreState();
+  syncGroupSyncPill();
+
+  if (!silent) {
+    showSheet({
+      label: "Sync",
+      title: "Groep gesynct",
+      message: `Group: ${groupUploaded ? "ok" : "failed"}. Members uploaded: ${membersUploaded}.`,
+    });
+  }
+  return { groupUploaded, membersUploaded };
+}
+
+async function syncCurrentGroupToBackend() {
+  const button = document.querySelector("#sync-group-backend");
+  if (button instanceof HTMLButtonElement) {
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.textContent = "Syncing…";
+  }
+  setGroupBackendStatus("Sync bezig…");
+  try {
+    await pushCurrentGroupToBackend({ silent: true });
+    setGroupBackendStatus("Backend sync ok.");
+  } catch {
+    setGroupBackendStatus("Backend sync failed (zie console).");
+  } finally {
+    if (button instanceof HTMLButtonElement) {
+      button.disabled = !state.apiBase;
+      button.removeAttribute("aria-busy");
+      button.textContent = "Sync naar backend";
+    }
+  }
+}
+
 async function ensureInviteCodeFromBackend(groupId, { silent = true } = {}) {
   if (!state.apiBase) return "";
   const id = String(groupId || "").trim();
@@ -3563,6 +3658,10 @@ document.querySelector("#send-reminder").addEventListener("click", () => {
     title: "Groep krijgt een push",
     message: "Iedereen die nog niet klaar is krijgt: 'Je hebt nog checks open. Breek de chain niet.'",
   });
+});
+
+document.querySelector("#sync-group-backend")?.addEventListener("click", () => {
+  syncCurrentGroupToBackend();
 });
 
 document.querySelector("#edit-rules").addEventListener("click", () => {
