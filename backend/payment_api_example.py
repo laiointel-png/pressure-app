@@ -44,6 +44,7 @@ app.include_router(router)
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 PROFILES_PATH = DATA_DIR / "profiles.json"
+LEDGER_PATH = DATA_DIR / "ledger.json"
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -60,6 +61,22 @@ def _write_json(path: Path, payload: Any) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     tmp.replace(path)
+
+
+def _read_ledger() -> list[dict[str, Any]]:
+    items = _read_json(LEDGER_PATH, default=[])
+    if isinstance(items, list):
+        return [item for item in items if isinstance(item, dict)]
+    return []
+
+
+def _append_ledger_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(entry, dict):
+        return {}
+    ledger = _read_ledger()
+    ledger.append(entry)
+    _write_json(LEDGER_PATH, ledger)
+    return entry
 
 
 def _upsert_profile_from_stripe(
@@ -428,6 +445,31 @@ def charge_miss_fee(payload: MissFeeRequest) -> dict[str, Any]:
             "reason": payload.reason,
             "cash_payout_created": "false",
         },
+    )
+
+    from datetime import datetime, timezone
+
+    created_at = ""
+    try:
+        if intent.created:
+            created_at = datetime.fromtimestamp(int(intent.created), tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    except Exception:
+        created_at = ""
+
+    _append_ledger_entry(
+        {
+            "id": f"led_{intent.id}",
+            "group_id": payload.group_id,
+            "kind": "miss_fee",
+            "user_id": payload.user_id,
+            "display_name": "",
+            "amount_cents": int(payload.amount_cents),
+            "currency": "eur",
+            "description": f"miss_fee:{payload.reason}",
+            "status": str(intent.status or "charged"),
+            "payment_intent_id": intent.id,
+            "created_at": created_at,
+        }
     )
     return {
         "mode": "stripe",
