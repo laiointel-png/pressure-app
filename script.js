@@ -3501,6 +3501,36 @@ async function pushLocalMembersToBackend({ silent = false } = {}) {
   return { uploaded, failed };
 }
 
+async function pushLocalLedgerToBackend({ silent = true } = {}) {
+  if (!state.apiBase) return { uploaded: 0, failed: 0 };
+  const groups = sortedGroups();
+  if (!groups.length) return { uploaded: 0, failed: 0 };
+
+  let uploaded = 0;
+  let failed = 0;
+
+  for (const group of groups) {
+    const groupId = String(group?.id || "").trim();
+    if (!groupId) continue;
+    const entries = ledgerEntriesForGroup(groupId);
+    for (const entry of entries) {
+      const saved = await appendLedgerToBackend(entry, { silent: true });
+      if (saved) uploaded += 1;
+      else failed += 1;
+    }
+  }
+
+  if (!silent) {
+    showSheet({
+      label: "Ledger",
+      title: "Ledger gesynct",
+      message: `Uploaded ${uploaded}. Failed ${failed}.`,
+    });
+  }
+
+  return { uploaded, failed };
+}
+
 function normalizeImportedGroup(raw) {
   if (!raw) return null;
   const id = String(raw.id || raw.group_id || "").trim();
@@ -4180,8 +4210,10 @@ document.querySelector("#onboard-group-mode-join")?.addEventListener("change", (
 function setOnboardingSubmitBusy(isBusy) {
   const form = document.querySelector("#onboard-form");
   const button = document.querySelector("#onboard-submit");
+  const status = document.querySelector("#onboard-submit-status");
   if (form) form.setAttribute("aria-busy", isBusy ? "true" : "false");
   if (button instanceof HTMLButtonElement) button.disabled = Boolean(isBusy);
+  if (status instanceof HTMLElement) status.textContent = isBusy ? "Even geduld… we slaan alles op." : "";
 }
 
 async function fetchBackendGroupByCode({ apiBase, groupCode }) {
@@ -4336,157 +4368,163 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
     return;
   }
 
-  state.user = {
-    ...state.user,
-    name,
-    email,
-    initial: initialFromName(name),
-  };
+  setOnboardingSubmitBusy(true);
+  try {
+    state.user = {
+      ...state.user,
+      name,
+      email,
+      initial: initialFromName(name),
+    };
 
-  if (state.onboardingMode !== "edit") {
-    if (!state.user.id || state.user.id === "user_demo") state.user.id = newId("user");
-    if (!state.group.id || state.group.id === "group_demo") state.group.id = newId("group");
-    state.activeGroupId = state.group.id;
-  }
-
-  state.group = {
-    ...state.group,
-    name: groupName,
-    deadline,
-    feeLabel,
-    destinationLabel: "Platform fee, geen cash-out",
-  };
-  if (apiBase) {
-    state.apiBase = apiBase;
-    localStorage.setItem(API_BASE_KEY, apiBase);
-  } else {
-    state.apiBase = "";
-    localStorage.removeItem(API_BASE_KEY);
-  }
-
-  ensureIds();
-
-  const finalize = async () => {
-    const shouldOfferBillingSetup =
-      state.onboardingMode !== "edit" && Boolean(state.apiBase) && Boolean(state.user?.email) && !state.paymentMandateSetup;
-    if (state.onboardingGroupMode === "create" && !state.apiBase && !String(state.group.joinCode || "").trim()) {
-      state.group.joinCode = localJoinCodeFromGroupId(state.group.id);
+    if (state.onboardingMode !== "edit") {
+      if (!state.user.id || state.user.id === "user_demo") state.user.id = newId("user");
+      if (!state.group.id || state.group.id === "group_demo") state.group.id = newId("group");
+      state.activeGroupId = state.group.id;
     }
-    upsertGroup(state.group);
-    ensureSelfMemberLocal();
-    state.onboardingComplete = true;
-    clearOnboardingDraft();
-    persistCoreState();
-    syncGroupUI();
-    syncUserUI();
-    syncPaymentModel();
-    if (state.onboardingGroupMode === "create") {
-      await saveGroupToBackend(state.group, { silent: true });
-      await ensureInviteCodeFromBackend(state.group.id, { silent: true });
-      syncInviteLinkUI();
-      updateInvitePreview();
+
+    state.group = {
+      ...state.group,
+      name: groupName,
+      deadline,
+      feeLabel,
+      destinationLabel: "Platform fee, geen cash-out",
+    };
+    if (apiBase) {
+      state.apiBase = apiBase;
+      localStorage.setItem(API_BASE_KEY, apiBase);
+    } else {
+      state.apiBase = "";
+      localStorage.removeItem(API_BASE_KEY);
     }
+
+    ensureIds();
+
+    const finalize = async () => {
+      const shouldOfferBillingSetup =
+        state.onboardingMode !== "edit" && Boolean(state.apiBase) && Boolean(state.user?.email) && !state.paymentMandateSetup;
+      if (state.onboardingGroupMode === "create" && !state.apiBase && !String(state.group.joinCode || "").trim()) {
+        state.group.joinCode = localJoinCodeFromGroupId(state.group.id);
+      }
+      upsertGroup(state.group);
+      ensureSelfMemberLocal();
+      state.onboardingComplete = true;
+      clearOnboardingDraft();
+      persistCoreState();
+      syncGroupUI();
+      syncUserUI();
+      syncPaymentModel();
+      if (state.onboardingGroupMode === "create") {
+        await saveGroupToBackend(state.group, { silent: true });
+        await ensureInviteCodeFromBackend(state.group.id, { silent: true });
+        syncInviteLinkUI();
+        updateInvitePreview();
+      }
     if (state.apiBase) {
       await upsertProfileToBackend({ silent: true });
       await upsertMemberToBackend(
         {
           groupId: state.group.id,
-          userId: state.user.id,
-          displayName: state.user.name || "Jij",
-          initial: state.user.initial || "Y",
-        },
-        { silent: true },
+            userId: state.user.id,
+            displayName: state.user.name || "Jij",
+            initial: state.user.initial || "Y",
+          },
+          { silent: true },
       );
       await syncMembersFromBackend({ silent: true });
     }
-    if (state.apiBase) pushLocalGroupsToBackend({ silent: true });
+    if (state.apiBase) {
+      await pushLocalGroupsToBackend({ silent: true });
+      await pushLocalMembersToBackend({ silent: true });
+      await upsertCheckinToBackend({ silent: true });
+      await pushLocalLedgerToBackend({ silent: true });
+      await syncLedgerFromBackend({ silent: true });
+    }
     if (state.apiBase) {
       await testApiConnection(state.apiBase, { silent: true });
       await checkStripeHealth({ silent: true });
     }
-    updateHome();
-    updateCamera();
-    showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
+      updateHome();
+      updateCamera();
+      showScreen(state.onboardingMode === "edit" ? state.onboardingReturnTo || "profile" : "home");
 
-    if (shouldOfferBillingSetup && state.stripeReady && !state.paymentMandateSetup) {
-      window.setTimeout(() => {
-        showSheet({
-          label: "Billing",
-          title: "Sla nu een payment method op",
-          message:
-            "Met een mandate kan de backend later miss fees off-session chargen. Dit opent Stripe setup (test) in een nieuw tabblad.",
-          primary: "Open billing",
-          secondary: "Later",
-          onPrimary: () => showScreen("billing"),
-        });
-      }, 50);
-    }
-  };
-
-  if (mode === "join") {
-    state.onboardingGroupMode = "join";
-
-    if (!groupCode) {
-      showSheet({
-        label: "Join",
-        title: "Vul een group code in",
-        message: "Gebruik een invite code (`code_...`) of een group id (`group_...`).",
-      });
-      document.querySelector("#onboard-group-code")?.focus();
-      return;
-    }
-
-    if (!state.apiBase) {
-      if (invitePayload?.id) {
-        const group = normalizeBackendGroup(invitePayload) || {
-          id: invitePayload.id,
-          name: invitePayload.name,
-          deadline: invitePayload.deadline,
-          feeLabel: invitePayload.feeLabel,
-          destinationLabel: invitePayload.destinationLabel,
-          membersCount: 4,
-          joinCode: groupCode,
-        };
-        state.group = { ...state.group, ...group, id: group.id, joinCode: groupCode };
-        state.activeGroupId = group.id;
-        await finalize();
-        showSheet({
-          label: "Invite",
-          title: "Je zit nu in de group",
-          message: `${state.group.name} · Offline invite (zonder backend).`,
-        });
-        return;
+      if (shouldOfferBillingSetup && state.stripeReady && !state.paymentMandateSetup) {
+        window.setTimeout(() => {
+          showSheet({
+            label: "Billing",
+            title: "Sla nu een payment method op",
+            message:
+              "Met een mandate kan de backend later miss fees off-session chargen. Dit opent Stripe setup (test) in een nieuw tabblad.",
+            primary: "Open billing",
+            secondary: "Later",
+            onPrimary: () => showScreen("billing"),
+          });
+        }, 50);
       }
+    };
 
-      const localGroup = findLocalGroupByCode(groupCode);
-      if (localGroup?.id) {
-        state.group = {
-          ...state.group,
-          ...localGroup,
-          id: localGroup.id,
-          joinCode: String(localGroup.joinCode || localGroup.join_code || groupCode).trim(),
-        };
-        state.activeGroupId = localGroup.id;
-        await finalize();
+    if (mode === "join") {
+      state.onboardingGroupMode = "join";
+
+      if (!groupCode) {
         showSheet({
           label: "Join",
-          title: "Local group gevonden",
-          message: `${state.group.name} · Join via opgeslagen groups (zonder backend).`,
+          title: "Vul een group code in",
+          message: "Gebruik een invite code (`code_...`) of een group id (`group_...`).",
+        });
+        document.querySelector("#onboard-group-code")?.focus();
+        return;
+      }
+
+      if (!state.apiBase) {
+        if (invitePayload?.id) {
+          const group = normalizeBackendGroup(invitePayload) || {
+            id: invitePayload.id,
+            name: invitePayload.name,
+            deadline: invitePayload.deadline,
+            feeLabel: invitePayload.feeLabel,
+            destinationLabel: invitePayload.destinationLabel,
+            membersCount: 4,
+            joinCode: groupCode,
+          };
+          state.group = { ...state.group, ...group, id: group.id, joinCode: groupCode };
+          state.activeGroupId = group.id;
+          await finalize();
+          showSheet({
+            label: "Invite",
+            title: "Je zit nu in de group",
+            message: `${state.group.name} · Offline invite (zonder backend).`,
+          });
+          return;
+        }
+        const localGroup = findLocalGroupByCode(groupCode);
+        if (localGroup?.id) {
+          state.group = {
+            ...state.group,
+            ...localGroup,
+            id: localGroup.id,
+            joinCode: String(localGroup.joinCode || localGroup.join_code || groupCode).trim(),
+          };
+          state.activeGroupId = localGroup.id;
+          await finalize();
+          showSheet({
+            label: "Join",
+            title: "Local group gevonden",
+            message: `${state.group.name} · Join via opgeslagen groups (zonder backend).`,
+          });
+          return;
+        }
+
+        showSheet({
+          label: "Join",
+          title: "Backend API ontbreekt",
+          message:
+            "Zet een API base (bijv. http://localhost:8001) om de group op te halen, of open een invite link die group info bevat.",
         });
         return;
       }
 
-      showSheet({
-        label: "Join",
-        title: "Backend API ontbreekt",
-        message:
-          "Zet een API base (bijv. http://localhost:8001) om de group op te halen, of open een invite link die group info bevat.",
-      });
-      return;
-    }
-
     try {
-      setOnboardingSubmitBusy(true);
       const rawGroup = await fetchBackendGroupByCode({ apiBase: state.apiBase, groupCode });
       const group = normalizeBackendGroup(rawGroup);
       if (!group) throw new Error("group_invalid");
@@ -4505,14 +4543,22 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
         title: "Join mislukt",
         message: "Invite code / group id niet gevonden of backend gaf een error. Check code, backend en CORS.",
       });
-    } finally {
-      setOnboardingSubmitBusy(false);
     }
     return;
   }
 
   state.onboardingGroupMode = "create";
   await finalize();
+  } catch (error) {
+    console.warn("onboarding_submit_failed", error);
+    showSheet({
+      label: "Onboarding",
+      title: "Opslaan mislukt",
+      message: "Er ging iets mis tijdens setup. Probeer opnieuw of gebruik demo data.",
+    });
+  } finally {
+    setOnboardingSubmitBusy(false);
+  }
 });
 
 document.querySelectorAll("[data-screen-target]").forEach((button) => {
