@@ -24,8 +24,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 try:
+    # Always prefer exposing `/api/payments/*` even when Stripe isn't installed.
+    # `backend.payment_api_example` is built to fail-open into demo mode when `stripe` is missing,
+    # so only treat the module as unavailable if it truly cannot be imported.
     from backend.payment_api_example import router as payments_router
-except Exception:  # pragma: no cover - optional for prototype.
+except ImportError:  # pragma: no cover - optional for prototype.
     payments_router = None
 
 
