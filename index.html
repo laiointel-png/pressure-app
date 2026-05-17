@@ -118,7 +118,7 @@
 		              </label>
 	              <button class="secondary-button full-width" id="onboard-preview-group" type="button">Check group</button>
 	            </div>
-	            <label>
+            <label>
 	              <span>Backend API (optioneel)</span>
 	              <input
 	                id="onboard-api-base"
@@ -130,6 +130,35 @@
               />
               <small class="field-hint" id="onboard-api-hint">Alleen nodig voor echte Stripe/billing endpoints en group sync.</small>
             </label>
+
+            <label>
+              <span>Supabase URL (optioneel)</span>
+              <input
+                id="onboard-supabase-url"
+                type="url"
+                inputmode="url"
+                autocomplete="off"
+                placeholder="https://xxxx.supabase.co"
+                aria-describedby="onboard-supabase-hint"
+              />
+            </label>
+            <label>
+              <span>Supabase anon key (optioneel)</span>
+              <input
+                id="onboard-supabase-anon"
+                type="password"
+                autocomplete="off"
+                placeholder="eyJhbGciOi..."
+                aria-describedby="onboard-supabase-hint"
+              />
+              <small class="field-hint" id="onboard-supabase-hint">
+                Aanrader voor een echte app: Supabase voor auth + group persistence. Zonder Supabase blijft alles local-first.
+              </small>
+            </label>
+            <div class="onboard-row tight" aria-label="Supabase auth">
+              <button class="secondary-button full-width" id="onboard-supabase-login" type="button">Stuur magic link</button>
+              <span class="small-pill neutral" id="onboard-supabase-pill" aria-label="Supabase status">Uit</span>
+            </div>
             <div class="onboard-row tight">
               <button class="secondary-button full-width" id="test-api" type="button">Test API</button>
               <span class="small-pill" id="api-status-pill" aria-label="API status">Offline</span>

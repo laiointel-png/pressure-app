@@ -17,6 +17,14 @@ const state = {
     email: "",
     initial: "Y",
   },
+  supabase: {
+    url: "",
+    anonKey: "",
+    userId: "",
+    email: "",
+    sessionActive: false,
+    ready: false,
+  },
   groups: {},
   membersByGroup: {},
   activeGroupId: "",
@@ -68,6 +76,8 @@ const state = {
 
 const STORAGE_KEY = "pressure.mvp.v1";
 const API_BASE_KEY = "pressureApiBase";
+const SUPABASE_URL_KEY = "pressureSupabaseUrl";
+const SUPABASE_ANON_KEY = "pressureSupabaseAnonKey";
 const ONBOARD_DRAFT_KEY = "pressureOnboardingDraftV1";
 const CREATE_DRAFT_KEY = "pressureCreateDraftV1";
 const LEDGER_STORAGE_KEY = "pressure.ledger.v1";
@@ -202,6 +212,83 @@ function newId(prefix) {
     globalThis.crypto?.randomUUID?.bind(globalThis.crypto) ||
     (() => `${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`);
   return `${prefix}_${uuid()}`;
+}
+
+function normalizeSupabaseUrl(raw) {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return "";
+    return url.origin;
+  } catch {
+    return "";
+  }
+}
+
+function normalizeSupabaseAnonKey(raw) {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+  if (value.length < 20) return "";
+  return value;
+}
+
+function supabaseConfigured() {
+  return Boolean(state.supabase?.url && state.supabase?.anonKey);
+}
+
+let supabaseClientPromise = null;
+async function getSupabaseClient() {
+  if (!supabaseConfigured()) return null;
+  if (supabaseClientPromise) return supabaseClientPromise;
+  supabaseClientPromise = (async () => {
+    const mod = await import("https://esm.sh/@supabase/supabase-js@2");
+    return mod.createClient(state.supabase.url, state.supabase.anonKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    });
+  })();
+  return supabaseClientPromise;
+}
+
+async function refreshSupabaseSession({ silent = true } = {}) {
+  const client = await getSupabaseClient();
+  if (!client) {
+    state.supabase.sessionActive = false;
+    state.supabase.ready = false;
+    persistCoreState();
+    return null;
+  }
+  try {
+    const { data, error } = await client.auth.getSession();
+    if (error) throw error;
+    const session = data?.session || null;
+    state.supabase.sessionActive = Boolean(session?.access_token);
+    state.supabase.userId = String(session?.user?.id || "");
+    state.supabase.email = String(session?.user?.email || "");
+    state.supabase.ready = true;
+    persistCoreState();
+    if (!silent && !state.supabase.sessionActive) {
+      showSheet({
+        label: "Supabase",
+        title: "Log in om te syncen",
+        message: "Supabase is ingesteld, maar je bent niet ingelogd. Gebruik magic link login in onboarding.",
+      });
+    }
+    return session;
+  } catch (error) {
+    console.warn("supabase_session_failed", error);
+    state.supabase.sessionActive = false;
+    state.supabase.ready = false;
+    persistCoreState();
+    if (!silent) {
+      showSheet({
+        label: "Supabase",
+        title: "Supabase niet bereikbaar",
+        message: "Controleer Supabase URL/anon key en probeer opnieuw.",
+      });
+    }
+    return null;
+  }
 }
 
 function localJoinCodeFromGroupId(groupId) {
@@ -1043,6 +1130,8 @@ function scheduleOnboardingDraftSave() {
     const deadlineField = document.querySelector("#onboard-deadline");
     const feeField = document.querySelector("#onboard-fee");
     const apiBaseField = document.querySelector("#onboard-api-base");
+    const supabaseUrlField = document.querySelector("#onboard-supabase-url");
+    const supabaseAnonField = document.querySelector("#onboard-supabase-anon");
     const mode = document.querySelector('input[name="onboardGroupMode"]:checked')?.value || "create";
 
     const payload = {
@@ -1056,6 +1145,8 @@ function scheduleOnboardingDraftSave() {
       deadline: String(deadlineField?.value || "").trim(),
       fee: String(feeField?.value || "").trim(),
       apiBase: normalizeApiBase(String(apiBaseField?.value || "")),
+      supabaseUrl: normalizeSupabaseUrl(String(supabaseUrlField?.value || "")),
+      supabaseAnonKey: normalizeSupabaseAnonKey(String(supabaseAnonField?.value || "")),
     };
 
     try {
@@ -1096,6 +1187,8 @@ function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
   const deadlineField = document.querySelector("#onboard-deadline");
   const feeField = document.querySelector("#onboard-fee");
   const apiBaseField = document.querySelector("#onboard-api-base");
+  const supabaseUrlField = document.querySelector("#onboard-supabase-url");
+  const supabaseAnonField = document.querySelector("#onboard-supabase-anon");
 
   const draft = mode === "setup" && !invite?.join ? loadOnboardingDraft() : null;
 
@@ -1106,6 +1199,8 @@ function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
   if (deadlineField) deadlineField.value = invite?.groupPayload?.deadline || draft?.deadline || state.group.deadline || "22:00";
   if (feeField) feeField.value = invite?.groupPayload?.feeLabel || draft?.fee || state.group.feeLabel || "EUR 10";
   if (apiBaseField) apiBaseField.value = invite?.apiBase || draft?.apiBase || state.apiBase || "";
+  if (supabaseUrlField) supabaseUrlField.value = draft?.supabaseUrl || state.supabase.url || "";
+  if (supabaseAnonField) supabaseAnonField.value = state.supabase.anonKey || draft?.supabaseAnonKey || "";
 
   if (invite?.join) state.onboardingGroupMode = "join";
   else if (draft?.mode === "join" || draft?.mode === "create") state.onboardingGroupMode = draft.mode;
@@ -1544,6 +1639,18 @@ function hydrateFromStorage() {
   state.apiBase = normalizeApiBase(apiBase);
   if (state.apiBase) localStorage.setItem(API_BASE_KEY, state.apiBase);
 
+  const supaUrl =
+    normalizeSupabaseUrl(stored?.supabase?.url) || normalizeSupabaseUrl(localStorage.getItem(SUPABASE_URL_KEY) || "");
+  const supaAnon =
+    normalizeSupabaseAnonKey(stored?.supabase?.anonKey) ||
+    normalizeSupabaseAnonKey(localStorage.getItem(SUPABASE_ANON_KEY) || "");
+  state.supabase.url = supaUrl;
+  state.supabase.anonKey = supaAnon;
+  state.supabase.userId = String(stored?.supabase?.userId || "");
+  state.supabase.email = String(stored?.supabase?.email || "");
+  state.supabase.sessionActive = Boolean(stored?.supabase?.sessionActive);
+  state.supabase.ready = Boolean(stored?.supabase?.ready);
+
   ensureIds();
   upsertGroup(state.group);
   ensureSelfMemberLocal();
@@ -1553,6 +1660,7 @@ function hydrateFromStorage() {
 function persistCoreState() {
   saveModel({
     user: state.user,
+    supabase: state.supabase,
     groups: state.groups,
     membersByGroup: state.membersByGroup,
     activeGroupId: state.activeGroupId,
@@ -1727,6 +1835,51 @@ async function upsertMemberToBackend(member, { silent = true } = {}) {
         label: "Backend",
         title: "Member save failed",
         message: "Backend endpoint is niet bereikbaar of gaf een error. Local roster blijft leidend.",
+      });
+    }
+    return false;
+  }
+}
+
+async function upsertMemberToPersistence(member, { silent = true } = {}) {
+  const supa = await upsertMemberToSupabase(member, { silent: true });
+  const backend = await upsertMemberToBackend(member, { silent: true });
+  if (!silent && !(supa || backend)) {
+    showSheet({
+      label: "Sync",
+      title: "Geen persistence actief",
+      message: "Zet Supabase (auth) of een API base aan om leden te syncen. Local roster blijft leidend.",
+    });
+  }
+  return supa || backend;
+}
+
+async function upsertMemberToSupabase(member, { silent = true } = {}) {
+  const normalized = normalizeMember(member);
+  if (!normalized) return false;
+  if (!supabaseConfigured()) return false;
+  const session = await refreshSupabaseSession({ silent: true });
+  if (!session) return false;
+  try {
+    const client = await getSupabaseClient();
+    if (!client) return false;
+    const payload = {
+      group_id: normalized.groupId,
+      user_id: normalized.userId,
+      display_name: normalized.displayName,
+      initial: normalized.initial,
+      created_by: state.user.id,
+    };
+    const { error } = await client.from("members").upsert(payload, { onConflict: "group_id,user_id" });
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.warn("supabase_member_upsert_failed", error);
+    if (!silent) {
+      showSheet({
+        label: "Supabase",
+        title: "Member sync mislukt",
+        message: "Supabase write faalde. Check RLS policies en of je ingelogd bent.",
       });
     }
     return false;
@@ -2974,6 +3127,58 @@ async function appendLedgerToBackend(entry, { silent = true } = {}) {
   }
 }
 
+async function appendLedgerToPersistence(entry, { silent = true } = {}) {
+  const supa = await appendLedgerToSupabase(entry, { silent: true });
+  const backend = await appendLedgerToBackend(entry, { silent: true });
+  if (!silent && !(supa || backend)) {
+    showSheet({
+      label: "Sync",
+      title: "Geen persistence actief",
+      message: "Zet Supabase (auth) of een API base aan om ledger te syncen. Local ledger blijft leidend.",
+    });
+  }
+  return supa || backend;
+}
+
+async function appendLedgerToSupabase(entry, { silent = true } = {}) {
+  const normalized = normalizeLedgerEntry(entry);
+  if (!normalized) return null;
+  if (!supabaseConfigured()) return null;
+  const session = await refreshSupabaseSession({ silent: true });
+  if (!session) return null;
+  try {
+    const client = await getSupabaseClient();
+    if (!client) return null;
+    const payload = {
+      id: normalized.id,
+      group_id: normalized.groupId,
+      kind: normalized.kind,
+      user_id: normalized.userId || null,
+      display_name: normalized.displayName || null,
+      amount_cents: normalized.amountCents,
+      currency: normalized.currency,
+      description: normalized.description,
+      status: normalized.status,
+      payment_intent_id: normalized.paymentIntentId || null,
+      created_at: normalized.createdAt,
+      created_by: state.user.id,
+    };
+    const { error } = await client.from("ledger").insert(payload);
+    if (error) throw error;
+    return normalized;
+  } catch (error) {
+    console.warn("supabase_ledger_insert_failed", error);
+    if (!silent) {
+      showSheet({
+        label: "Supabase",
+        title: "Ledger sync mislukt",
+        message: "Supabase write faalde. Check RLS policies en of je ingelogd bent.",
+      });
+    }
+    return null;
+  }
+}
+
 function simulateMissFee() {
   const entry = upsertLedgerEntryLocal({
     groupId: state.group.id,
@@ -2986,7 +3191,7 @@ function simulateMissFee() {
     description: `Timothy miss fee verwerkt als ${destinationLabel()}`,
     createdAt: new Date().toISOString(),
   });
-  if (entry) appendLedgerToBackend(entry, { silent: true });
+  if (entry) appendLedgerToPersistence(entry, { silent: true });
   syncLedgerUI();
 
   addFeedItem("Timothy miste de deadline", `EUR 10 ${destinationLabel()}, geen pot`, "bad");
@@ -3038,7 +3243,7 @@ async function chargeMissFeeBackend() {
       description: `Miss fee charge (${mode})`,
       createdAt: new Date().toISOString(),
     });
-    if (entry) appendLedgerToBackend(entry, { silent: true });
+    if (entry) appendLedgerToPersistence(entry, { silent: true });
     syncLedgerUI();
 
     showSheet({
@@ -3105,7 +3310,7 @@ async function settleTodaysMisses() {
           description,
           createdAt: new Date().toISOString(),
         });
-        if (entry) await appendLedgerToBackend(entry, { silent: true });
+        if (entry) await appendLedgerToPersistence(entry, { silent: true });
         processed += 1;
         continue;
       }
@@ -3138,7 +3343,7 @@ async function settleTodaysMisses() {
         description,
         createdAt: new Date().toISOString(),
       });
-      if (entry) await appendLedgerToBackend(entry, { silent: true });
+      if (entry) await appendLedgerToPersistence(entry, { silent: true });
       processed += 1;
     }
 
@@ -3185,6 +3390,53 @@ async function saveGroupToBackend(group, { silent = true } = {}) {
   }
 }
 
+async function saveGroupToPersistence(group, { silent = true } = {}) {
+  const supa = await upsertGroupToSupabase(group, { silent: true });
+  const backend = await saveGroupToBackend(group, { silent: true });
+  if (!silent && !(supa || backend)) {
+    showSheet({
+      label: "Sync",
+      title: "Geen persistence actief",
+      message: "Zet Supabase (auth) of een API base aan om groups te syncen. Local storage blijft leidend.",
+    });
+  }
+  return supa || backend;
+}
+
+async function upsertGroupToSupabase(group, { silent = true } = {}) {
+  const normalized = group?.id ? group : null;
+  if (!normalized) return false;
+  if (!supabaseConfigured()) return false;
+  const session = await refreshSupabaseSession({ silent: true });
+  if (!session) return false;
+  try {
+    const client = await getSupabaseClient();
+    if (!client) return false;
+    const payload = {
+      id: normalized.id,
+      name: normalized.name,
+      deadline: normalized.deadline,
+      fee_label: normalized.feeLabel,
+      destination_label: normalized.destinationLabel,
+      join_code: normalized.joinCode || "",
+      owner_user_id: state.user.id,
+    };
+    const { error } = await client.from("groups").upsert(payload, { onConflict: "id" });
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.warn("supabase_group_upsert_failed", error);
+    if (!silent) {
+      showSheet({
+        label: "Supabase",
+        title: "Group sync mislukt",
+        message: "Supabase write faalde. Check RLS policies en of je ingelogd bent.",
+      });
+    }
+    return false;
+  }
+}
+
 function setGroupBackendStatus(message = "") {
   const status = document.querySelector("#group-backend-status");
   if (!(status instanceof HTMLElement)) return;
@@ -3218,7 +3470,7 @@ async function pushCurrentGroupToBackend({ silent = false } = {}) {
   }
 
   const group = state.groups?.[groupId] ? { ...state.groups[groupId], id: groupId } : { ...state.group, id: groupId };
-  const groupUploaded = await saveGroupToBackend(group, { silent: true });
+  const groupUploaded = await saveGroupToPersistence(group, { silent: true });
   if (groupUploaded) await ensureInviteCodeFromBackend(groupId, { silent: true });
 
   const members = buildMembersBulkPayloadForGroup(groupId);
@@ -3229,7 +3481,7 @@ async function pushCurrentGroupToBackend({ silent = false } = {}) {
       membersUploaded = Number(payload?.upserted || 0) || members.length;
     } catch {
       for (const member of members) {
-        const ok = await upsertMemberToBackend(
+        const ok = await upsertMemberToPersistence(
           {
             groupId,
             userId: member.user_id,
@@ -3409,7 +3661,7 @@ async function pushLocalGroupsToBackend({ silent = false } = {}) {
   let failed = 0;
   for (const group of groups) {
     // best-effort; any failures remain local-only
-    const ok = await saveGroupToBackend(group, { silent: true });
+    const ok = await saveGroupToPersistence(group, { silent: true });
     if (ok) {
       uploaded += 1;
       const hasJoinCode = Boolean(String(group?.joinCode || group?.join_code || "").trim());
@@ -3472,7 +3724,7 @@ async function pushLocalMembersToBackend({ silent = false } = {}) {
     } catch {
       // Older backend: fall back to per-member writes.
       for (const member of members) {
-        const ok = await upsertMemberToBackend(
+        const ok = await upsertMemberToPersistence(
           {
             groupId: groupId,
             userId: member.user_id,
@@ -3514,7 +3766,7 @@ async function pushLocalLedgerToBackend({ silent = true } = {}) {
     if (!groupId) continue;
     const entries = ledgerEntriesForGroup(groupId);
     for (const entry of entries) {
-      const saved = await appendLedgerToBackend(entry, { silent: true });
+      const saved = await appendLedgerToPersistence(entry, { silent: true });
       if (saved) uploaded += 1;
       else failed += 1;
     }
@@ -4303,6 +4555,67 @@ async function previewJoinGroup() {
 
 document.querySelector("#onboard-preview-group")?.addEventListener("click", previewJoinGroup);
 
+document.querySelector("#onboard-supabase-login")?.addEventListener("click", async () => {
+  const url = normalizeSupabaseUrl(document.querySelector("#onboard-supabase-url")?.value || state.supabase.url || "");
+  const anonKey = normalizeSupabaseAnonKey(
+    document.querySelector("#onboard-supabase-anon")?.value || state.supabase.anonKey || "",
+  );
+  const email = String(document.querySelector("#onboard-email")?.value || state.user.email || "").trim();
+
+  if (!url || !anonKey) {
+    showSheet({
+      label: "Supabase",
+      title: "Supabase ontbreekt",
+      message: "Vul Supabase URL + anon key in om magic link login te gebruiken.",
+    });
+    return;
+  }
+  if (!email) {
+    showSheet({
+      label: "Supabase",
+      title: "Email ontbreekt",
+      message: "Vul een email in. Supabase magic link wordt daarheen gestuurd.",
+    });
+    document.querySelector("#onboard-email")?.focus();
+    return;
+  }
+
+  state.supabase.url = url;
+  state.supabase.anonKey = anonKey;
+  localStorage.setItem(SUPABASE_URL_KEY, url);
+  localStorage.setItem(SUPABASE_ANON_KEY, anonKey);
+  persistCoreState();
+
+  const pill = document.querySelector("#onboard-supabase-pill");
+  if (pill) pill.textContent = "Sturen...";
+
+  try {
+    const client = await getSupabaseClient();
+    if (!client) throw new Error("supabase_client_missing");
+    const { error } = await client.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.href.split("#")[0] + "#onboard",
+      },
+    });
+    if (error) throw error;
+    if (pill) pill.textContent = "Mail verzonden";
+    showSheet({
+      label: "Supabase",
+      title: "Magic link verstuurd",
+      message: "Open de link in je mail op dit device. Daarna is sync mogelijk met Supabase.",
+    });
+  } catch (error) {
+    console.warn("supabase_magic_link_failed", error);
+    if (pill) pill.textContent = "Error";
+    showSheet({
+      label: "Supabase",
+      title: "Magic link mislukt",
+      message: "Controleer Supabase settings (Auth + redirect URL) en probeer opnieuw.",
+    });
+  }
+});
+
 document.querySelector("#skip-onboarding")?.addEventListener("click", () => {
   if (state.onboardingMode === "edit") {
     resetToDemo();
@@ -4325,6 +4638,8 @@ document.querySelector("#skip-onboarding")?.addEventListener("click", () => {
   "#onboard-deadline",
   "#onboard-fee",
   "#onboard-api-base",
+  "#onboard-supabase-url",
+  "#onboard-supabase-anon",
 ].forEach((selector) => {
   document.querySelector(selector)?.addEventListener("input", scheduleOnboardingDraftSave);
 });
@@ -4347,17 +4662,19 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
   const deadline = document.querySelector("#onboard-deadline")?.value || "22:00";
   const feeLabel = document.querySelector("#onboard-fee")?.value || "EUR 10";
   let apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
+  const supabaseUrl = normalizeSupabaseUrl(document.querySelector("#onboard-supabase-url")?.value || "");
+  const supabaseAnonKey = normalizeSupabaseAnonKey(document.querySelector("#onboard-supabase-anon")?.value || "");
   const hydrated = hydrateOnboardingFromInviteText(groupCode);
   if (hydrated?.join) groupCode = hydrated.join;
   apiBase = normalizeApiBase(document.querySelector("#onboard-api-base")?.value || "");
   const invitePayload = hydrated?.groupPayload || state.inviteGroupPayload;
 
-  if (apiBase && !email) {
+  if ((apiBase || supabaseUrl) && !email) {
     showSheet({
       label: "Profiel",
       title: "Email ontbreekt (aanrader)",
       message:
-        "Met een backend kun je zonder email nog steeds groups syncen, maar billing/Stripe re-hydrate (customer lookup + portal) werkt beter met email. Je kunt ook later in Profiel aanpassen.",
+        "Met backend of Supabase kun je zonder email nog steeds groups syncen, maar billing/Stripe re-hydrate en Supabase magic link login werken beter met email. Je kunt ook later in Profiel aanpassen.",
       primary: "Toch doorgaan",
       secondary: "Email invullen",
       onSecondary: () => {
@@ -4397,6 +4714,22 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
       state.apiBase = "";
       localStorage.removeItem(API_BASE_KEY);
     }
+
+    if (supabaseUrl && supabaseAnonKey) {
+      state.supabase.url = supabaseUrl;
+      state.supabase.anonKey = supabaseAnonKey;
+      localStorage.setItem(SUPABASE_URL_KEY, supabaseUrl);
+      localStorage.setItem(SUPABASE_ANON_KEY, supabaseAnonKey);
+      await refreshSupabaseSession({ silent: true });
+    } else {
+      state.supabase.url = supabaseUrl || "";
+      state.supabase.anonKey = supabaseAnonKey || "";
+      localStorage.removeItem(SUPABASE_URL_KEY);
+      localStorage.removeItem(SUPABASE_ANON_KEY);
+      state.supabase.sessionActive = false;
+      state.supabase.ready = false;
+    }
+    persistCoreState();
 
     ensureIds();
 
