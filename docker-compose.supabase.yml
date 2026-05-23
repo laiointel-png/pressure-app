@@ -1,0 +1,85 @@
+name: pressure-supabase
+
+# Minimal local Supabase stack for this MVP.
+# Ports (matching Supabase local defaults where possible):
+# - API gateway (Kong): http://localhost:54321
+# - Postgres: localhost:54322
+#
+# Notes:
+# - This is for local dev only.
+# - Keys/JWT secret are DEV ONLY. Rotate for any real deployment.
+
+services:
+  db:
+    image: supabase/postgres:15.8.1.048
+    container_name: pressure-supabase-db
+    restart: unless-stopped
+    ports:
+      - "54322:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - pressure_supabase_db:/var/lib/postgresql/data
+
+  auth:
+    image: supabase/gotrue:v2.158.0
+    container_name: pressure-supabase-auth
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:5173}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-http://localhost:5173,#onboard,file:///Users/videomarketing1/Documents/FIN/index.html}
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_SECRET: ${SUPABASE_JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:postgres@db:5432/postgres
+      GOTRUE_MAILER_URLPATHS_INVITE: /#onboard
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /#onboard
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /#onboard
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /#onboard
+
+  rest:
+    image: postgrest/postgrest:v12.2.8
+    container_name: pressure-supabase-rest
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      PGRST_DB_URI: postgres://postgres:postgres@db:5432/postgres
+      PGRST_DB_SCHEMA: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${SUPABASE_JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      PGRST_SERVER_PORT: 3000
+
+  kong:
+    image: kong:3.7
+    container_name: pressure-supabase-kong
+    restart: unless-stopped
+    depends_on:
+      - auth
+      - rest
+    ports:
+      - "54321:8000"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+    volumes:
+      - ./supabase/kong.yml:/usr/local/kong/kong.yml:ro
+
+volumes:
+  pressure_supabase_db:
+

@@ -16,6 +16,25 @@ In Supabase:
    - Local: `http://localhost:5173/#onboard`
    - GitHub Pages: `https://<username>.github.io/<repo>/#onboard`
 
+## Optional: local Supabase via Docker
+
+If you want a local stack (no cloud project yet), this repo includes a minimal compose file:
+
+- [`/Users/videomarketing1/Documents/FIN/docker-compose.supabase.yml`](/Users/videomarketing1/Documents/FIN/docker-compose.supabase.yml)
+- [`/Users/videomarketing1/Documents/FIN/supabase/kong.yml`](/Users/videomarketing1/Documents/FIN/supabase/kong.yml)
+
+Run:
+
+```bash
+docker compose -f docker-compose.supabase.yml up -d
+```
+
+Then point the app to:
+
+- `Supabase URL`: `http://localhost:54321`
+
+This is dev-only and intentionally minimal; for a full local Supabase experience, the Supabase CLI is recommended.
+
 ## 2) Configure the app (onboarding)
 
 Open the app and set:

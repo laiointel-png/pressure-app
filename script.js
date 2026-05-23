@@ -41,7 +41,10 @@ const state = {
   verifiedCount: 6,
   todayChecks: 2,
   activeExerciseIndex: 2,
-  tracePercent: 52,
+  tracePercent: 0,
+  traceCleanMs: 0,
+  traceRequiredMs: 10_000,
+  traceLastTickAt: 0,
   trust: 92,
   form: 88,
   visionMode: "demo",
@@ -256,6 +259,7 @@ async function refreshSupabaseSession({ silent = true } = {}) {
     state.supabase.sessionActive = false;
     state.supabase.ready = false;
     persistCoreState();
+    syncSupabaseStatusPill();
     return null;
   }
   try {
@@ -267,6 +271,7 @@ async function refreshSupabaseSession({ silent = true } = {}) {
     state.supabase.email = String(session?.user?.email || "");
     state.supabase.ready = true;
     persistCoreState();
+    syncSupabaseStatusPill();
     if (!silent && !state.supabase.sessionActive) {
       showSheet({
         label: "Supabase",
@@ -280,6 +285,7 @@ async function refreshSupabaseSession({ silent = true } = {}) {
     state.supabase.sessionActive = false;
     state.supabase.ready = false;
     persistCoreState();
+    syncSupabaseStatusPill();
     if (!silent) {
       showSheet({
         label: "Supabase",
@@ -289,6 +295,28 @@ async function refreshSupabaseSession({ silent = true } = {}) {
     }
     return null;
   }
+}
+
+function syncSupabaseStatusPill() {
+  const pill = document.querySelector("#onboard-supabase-pill");
+  if (!(pill instanceof HTMLElement)) return;
+  if (!supabaseConfigured()) {
+    pill.textContent = "Uit";
+    pill.className = "small-pill neutral";
+    return;
+  }
+  if (state.supabase.sessionActive) {
+    pill.textContent = "Ingelogd";
+    pill.className = "small-pill ok";
+    return;
+  }
+  if (state.supabase.ready) {
+    pill.textContent = "Klaar";
+    pill.className = "small-pill neutral";
+    return;
+  }
+  pill.textContent = "Ongetest";
+  pill.className = "small-pill neutral";
 }
 
 function localJoinCodeFromGroupId(groupId) {
@@ -961,6 +989,7 @@ const vision = {
     localVisionEndpoint,
   stream: null,
   timer: null,
+  traceTimer: null,
   raf: null,
   lastDetections: [],
 };
@@ -2335,6 +2364,7 @@ function updateCamera() {
   if (bar) bar.setAttribute("aria-valuenow", String(state.tracePercent));
 
   updateVisionUI(vision.lastDetections);
+  updateTraceGateUI();
 }
 
 function addFeedItem(title, subtitle, tone = "") {
@@ -2499,6 +2529,115 @@ function updateVisionUI(detections = []) {
   setText("#trust-score", hasPerson ? `${state.trust}%` : "Laag");
 }
 
+function activeCameraScreen() {
+  return Boolean(screens.camera?.classList.contains("active"));
+}
+
+function currentTraceDetections() {
+  return enrichDetections(vision.lastDetections.length ? vision.lastDetections : demoDetections());
+}
+
+function traceDetectionState() {
+  const detections = currentTraceDetections();
+  const hasPerson = detections.some(isPersonDetection);
+  const hasBody = detections.some((item) => item.label.toLowerCase().includes("body"));
+  const canProgress = activeCameraScreen() && !state.cameraPaused && hasPerson && hasBody && state.todayChecks < exercises.length;
+  return { detections, hasPerson, hasBody, canProgress };
+}
+
+function traceReady() {
+  return state.traceCleanMs >= state.traceRequiredMs;
+}
+
+function setTraceLine(selector, mode, text) {
+  const line = document.querySelector(selector);
+  if (!line) return;
+  line.classList.remove("okay", "warning", "blocked");
+  line.classList.add(mode);
+  line.textContent = text;
+}
+
+function updateTraceGateUI() {
+  const { hasPerson, hasBody, canProgress } = traceDetectionState();
+  const ready = traceReady();
+  const leftMs = Math.max(0, state.traceRequiredMs - state.traceCleanMs);
+  const leftSeconds = Math.ceil(leftMs / 1000);
+  const progress = Math.min(100, Math.round((state.traceCleanMs / state.traceRequiredMs) * 100));
+  state.tracePercent = progress;
+
+  const fill = document.querySelector("#trace-fill");
+  const bar = document.querySelector(".trace-bar");
+  if (fill) fill.style.width = `${progress}%`;
+  if (bar) bar.setAttribute("aria-valuenow", String(progress));
+
+  setText("#trace-timer", ready ? "DONE" : `00:${String(leftSeconds).padStart(2, "0")}`);
+  setText("#trace-hint", ready ? "Trace locked. Je kunt deze oefening nu accepteren." : "Blijf in beeld. De check opent pas na 10 seconden live trace.");
+  setText("#motion-score", state.cameraPaused ? "Pauze" : ready ? "Ready" : canProgress ? "Live" : "Wacht");
+
+  setTraceLine(
+    "#full-body-line",
+    hasPerson && hasBody ? "okay" : "blocked",
+    hasPerson && hasBody ? "Full body zichtbaar" : "Zet je hele lichaam in beeld",
+  );
+  setTraceLine(
+    "#movement-line",
+    canProgress || ready ? "okay" : state.cameraPaused ? "warning" : "blocked",
+    ready ? "10 sec live trace voltooid" : state.cameraPaused ? "Trace gepauzeerd" : canProgress ? "Live trace loopt" : "Trace wacht op live beeld",
+  );
+  setTraceLine(
+    "#angle-line",
+    ready ? "okay" : canProgress ? "warning" : "blocked",
+    ready ? `${currentExercise().title} geaccepteerd door trace` : currentExercise().lock,
+  );
+
+  const acceptButton = document.querySelector("#simulate-verify");
+  if (acceptButton instanceof HTMLButtonElement) {
+    acceptButton.disabled = !ready;
+    acceptButton.setAttribute("aria-disabled", acceptButton.disabled ? "true" : "false");
+    acceptButton.classList.toggle("ready", ready);
+    acceptButton.textContent = ready ? "Accepteer check" : `${leftSeconds}s nodig`;
+  }
+}
+
+function resetTraceGate({ announce = false } = {}) {
+  state.traceCleanMs = 0;
+  state.traceLastTickAt = Date.now();
+  state.tracePercent = 0;
+  updateTraceGateUI();
+  if (announce) setLiveStatus("Trace opnieuw gestart");
+}
+
+function tickTraceGate() {
+  if (!activeCameraScreen()) {
+    state.traceLastTickAt = Date.now();
+    return;
+  }
+
+  const now = Date.now();
+  const previous = state.traceLastTickAt || now;
+  const delta = Math.min(600, Math.max(0, now - previous));
+  state.traceLastTickAt = now;
+
+  if (!traceReady()) {
+    const { canProgress } = traceDetectionState();
+    if (canProgress) {
+      state.traceCleanMs = Math.min(state.traceRequiredMs, state.traceCleanMs + delta);
+    } else if (!state.cameraPaused && state.traceCleanMs > 0) {
+      state.traceCleanMs = Math.max(0, state.traceCleanMs - Math.round(delta * 0.35));
+    }
+  }
+
+  updateTraceGateUI();
+}
+
+function startTraceGate() {
+  state.traceLastTickAt = Date.now();
+  updateTraceGateUI();
+  if (!vision.traceTimer) {
+    vision.traceTimer = window.setInterval(tickTraceGate, 400);
+  }
+}
+
 function drawVisionOverlay(detections = []) {
   const canvas = document.querySelector("#vision-overlay");
   if (!canvas) return;
@@ -2599,6 +2738,7 @@ async function detectFrame() {
   }
 
   updateVisionUI(vision.lastDetections);
+  updateTraceGateUI();
 }
 
 async function startVision() {
@@ -2610,6 +2750,12 @@ async function startVision() {
     drawVisionLoop();
     updateVisionUI(vision.lastDetections);
   }
+
+  if (!vision.timer) {
+    detectFrame();
+    vision.timer = window.setInterval(detectFrame, 1400);
+  }
+  startTraceGate();
 
   if (!vision.stream && navigator.mediaDevices?.getUserMedia) {
     try {
@@ -2630,25 +2776,28 @@ async function startVision() {
       setLiveStatus("Camera toestemming niet beschikbaar. Demo controle actief.");
     }
   }
-
-  if (!vision.timer) {
-    detectFrame();
-    vision.timer = window.setInterval(detectFrame, 1400);
-  }
 }
 
 async function acceptCurrentExercise() {
+  if (!traceReady()) {
+    const leftSeconds = Math.ceil(Math.max(0, state.traceRequiredMs - state.traceCleanMs) / 1000);
+    showSheet({
+      label: "Trace nodig",
+      title: "Nog niet genoeg live bewijs",
+      message: `Blijf nog ${leftSeconds} seconden volledig in beeld. Daarna opent de check automatisch.`,
+    });
+    return;
+  }
+
   const current = currentExercise();
   addFeedItem(`${current.title} geaccepteerd`, `Trust score ${state.trust}%`, "good");
 
   if (state.activeExerciseIndex < exercises.length - 1) {
     state.todayChecks = Math.min(exercises.length, state.todayChecks + 1);
     state.activeExerciseIndex += 1;
-    state.tracePercent = 20;
+    resetTraceGate();
     state.form = currentExercise().form;
     state.trust = currentExercise().trust;
-    setText("#trace-timer", "00:10");
-    setText("#motion-score", "Actief");
     updateHome();
     updateCamera();
     await upsertCheckinToBackend({ silent: true });
@@ -2670,6 +2819,7 @@ async function acceptCurrentExercise() {
   state.streak += 1;
   state.verifiedCount += 1;
   state.todayChecks = exercises.length;
+  state.traceCleanMs = state.traceRequiredMs;
   state.tracePercent = 100;
   setText("#trace-timer", "DONE");
   setText("#motion-score", "Locked");
@@ -2684,18 +2834,11 @@ async function acceptCurrentExercise() {
 }
 
 function scanAgain() {
-  state.tracePercent = Math.min(100, state.tracePercent + 16);
-  state.form = Math.max(82, state.form - 1);
-  state.trust = Math.max(87, state.trust - 1);
-  setText(
-    "#trace-timer",
-    state.tracePercent >= 100
-      ? "00:00"
-      : `00:${String(Math.max(0, 10 - Math.floor(state.tracePercent / 10))).padStart(2, "0")}`,
-  );
+  resetTraceGate({ announce: true });
+  state.form = currentExercise().form;
+  state.trust = currentExercise().trust;
   vision.lastDetections = demoDetections();
   updateCamera();
-  setLiveStatus("Scan opnieuw uitgevoerd");
 }
 
 function destinationLabel() {
@@ -4343,7 +4486,7 @@ document.querySelector("#create-new-toggle")?.addEventListener("change", () => {
 document.querySelector("#pause-trace").addEventListener("click", () => {
   state.cameraPaused = !state.cameraPaused;
   setText("#camera-record-label", state.cameraPaused ? "Gepauzeerd" : "Live check");
-  setText("#motion-score", state.cameraPaused ? "Pauze" : "Actief");
+  updateTraceGateUI();
   showSheet({
     label: state.cameraPaused ? "Pauze" : "Live",
     title: state.cameraPaused ? "Check staat gepauzeerd" : "Check is weer live",
@@ -4928,6 +5071,7 @@ async function bootstrapBackendSync() {
 hydrateFromStorage();
 const invite = consumeJoinInviteFromUrl();
 if (invite) state.pendingInvite = invite;
+syncSupabaseStatusPill();
 renderGroupSelector();
 syncGroupUI();
 syncUserUI();
