@@ -1,0 +1,15 @@
+{
+  "name": "pressure-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "node --check script.js && node scripts/a11y_check.mjs",
+    "serve": "python3 -m http.server 5173",
+    "test:smoke": "node scripts/run_playwright.mjs",
+    "test:smoke:headed": "node scripts/run_playwright.mjs --headed",
+    "test:stress": "node scripts/stress_smoke.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.2"
+  }
+}

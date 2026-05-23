@@ -1282,10 +1282,15 @@ function syncNav(activeName) {
 
 function showScreen(name) {
   const screen = screens[name] || screens.home;
-  Object.values(screens).forEach((item) => item.classList.remove("active"));
-  screen.classList.add("active");
-  Object.values(screens).forEach((item) => {
-    item.scrollTop = 0;
+  const screenList = Object.values(screens).filter((item) => item && item.classList);
+  screenList.forEach((item) => item.classList.remove("active"));
+  if (screen && screen.classList) screen.classList.add("active");
+  screenList.forEach((item) => {
+    try {
+      item.scrollTop = 0;
+    } catch {
+      // ignore
+    }
   });
 
   const hash = name === "home" ? location.pathname : `#${name}`;
