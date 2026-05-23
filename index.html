@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@600;700;900&display=swap"
       rel="stylesheet"
     />
     <link
@@ -574,7 +574,7 @@
                 <div>
                   <span class="section-label">Workout telt als</span>
                   <h2 id="trace-panel-title">10 clean seconds</h2>
-                  <p id="trace-hint">Geen upload. Geen oude clip. Live camera of opnieuw scannen.</p>
+                  <p id="trace-hint">Blijf in beeld. De check opent pas na 10 seconden live trace.</p>
                 </div>
                 <div class="timer-wrap" aria-label="10 seconden nodig">
                   <strong id="trace-timer">00:10</strong>
@@ -599,16 +599,16 @@
                 </article>
               </div>
               <div class="trace-checklist" aria-label="Live trace checklist">
-                <div class="trace-line okay">Full body zichtbaar</div>
-                <div class="trace-line okay">Beweging stabiel</div>
+                <div class="trace-line okay" id="full-body-line">Full body zichtbaar</div>
+                <div class="trace-line okay" id="movement-line">Live trace loopt</div>
                 <div class="trace-line warning" id="angle-line">Schouderhoek 10 sec vasthouden</div>
               </div>
             </section>
           </div>
 
           <div class="camera-actions">
-            <button class="primary-button" id="simulate-verify" type="button">Accepteer check</button>
-            <button class="secondary-button" id="switch-exercise" type="button">Scan opnieuw</button>
+            <button class="primary-button" id="simulate-verify" type="button" disabled aria-disabled="true">Trace bezig</button>
+            <button class="secondary-button" id="switch-exercise" type="button">Reset trace</button>
           </div>
         </section>
 
