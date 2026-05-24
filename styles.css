@@ -139,6 +139,7 @@ svg {
   background: var(--soft);
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  pointer-events: none;
 }
 
 .screen.fullscreen {
@@ -168,6 +169,7 @@ svg {
 .screen.active {
   display: flex;
   animation: screenIn 280ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  pointer-events: auto;
 }
 
 /* Splash */
@@ -1506,6 +1508,23 @@ svg {
 .camera-stage > *:not(.camera-video):not(.vision-overlay) {
   position: relative;
   z-index: 2;
+}
+
+.device-frame.camera-full .camera-stage > *:not(.camera-video):not(.vision-overlay) {
+  display: none !important;
+}
+
+.device-frame.camera-full .camera-actions {
+  display: none !important;
+}
+
+.device-frame.camera-full .camera-stage {
+  margin: 0;
+  padding: 0;
+}
+
+.device-frame.camera-full .screen#screen-camera {
+  padding: 0;
 }
 
 .camera-top {

@@ -1325,6 +1325,7 @@ function showScreen(name) {
 
   const frame = document.querySelector(".device-frame");
   if (frame) frame.classList.toggle("onboarding", name === "onboard");
+  if (frame) frame.classList.toggle("camera-full", name === "camera");
 }
 
 let billingBootstrapTimer = null;
@@ -2767,7 +2768,7 @@ async function startVision() {
     try {
       vision.stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: "environment",
+          facingMode: { ideal: "user" },
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },

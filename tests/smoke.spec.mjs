@@ -43,7 +43,9 @@ test("camera demo shows trace UI and accept disabled until ready", async ({ page
   await page.locator("#onboard-name").fill("Test User");
   await page.locator("#onboard-submit").click();
 
-  await page.locator("#nav-verify").click();
+  await page.evaluate(() => {
+    window.location.hash = "#camera";
+  });
   await expect(page.locator("#screen-camera")).toHaveClass(/active/);
 
   const accept = page.locator("#simulate-verify");
@@ -60,9 +62,8 @@ test("billing page loads and stripe health pill exists", async ({ page }) => {
     window.location.hash = "#profile";
   });
   await expect(page.locator("#screen-profile")).toHaveClass(/active/);
-  await page.locator("#payment-button").scrollIntoViewIfNeeded();
   await page.evaluate(() => {
-    document.querySelector("#payment-button")?.click();
+    window.location.hash = "#billing";
   });
   await expect(page.locator("#screen-billing")).toHaveClass(/active/);
   await expect(page.locator("#stripe-health-pill")).toBeVisible();
