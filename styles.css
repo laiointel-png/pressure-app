@@ -170,6 +170,91 @@ svg {
   animation: screenIn 280ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
+/* Splash */
+.splash {
+  margin: auto;
+  width: min(320px, 92%);
+  text-align: center;
+  padding: 28px 18px;
+}
+
+.splash-logo {
+  width: 84px;
+  height: 84px;
+  border-radius: 24px;
+  margin: 0 auto 18px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: var(--shadow);
+}
+
+.splash-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  position: relative;
+  background: linear-gradient(135deg, var(--orange) 0%, var(--orange-dark) 100%);
+}
+
+.splash-mark::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 10px;
+  border: 3px solid rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.splash-title {
+  margin: 0;
+  letter-spacing: 0.14em;
+  font-family: var(--font-display, inherit);
+  font-weight: 900;
+  font-size: 22px;
+}
+
+.splash-tagline {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.splash-loader {
+  margin: 18px auto 0;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.splash-loader span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+  animation: splashDot 950ms ease-in-out infinite;
+}
+
+.splash-loader span:nth-child(2) {
+  animation-delay: 140ms;
+}
+.splash-loader span:nth-child(3) {
+  animation-delay: 280ms;
+}
+
+@keyframes splashDot {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-6px);
+    opacity: 0.95;
+  }
+}
+
 @keyframes screenIn {
   from {
     opacity: 0;
@@ -2192,4 +2277,3 @@ input:focus-visible {
   outline: 3px solid var(--orange);
   outline-offset: 2px;
 }
-

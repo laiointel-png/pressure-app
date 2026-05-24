@@ -1,4 +1,5 @@
 const screens = {
+  splash: document.querySelector("#screen-splash"),
   onboard: document.querySelector("#screen-onboard"),
   home: document.querySelector("#screen-home"),
   group: document.querySelector("#screen-group"),
@@ -5090,13 +5091,19 @@ bootstrapBackendSync();
 
 const stored = loadModel();
 const { screen: initialScreen } = parseHashRoute();
-if (invite?.join) {
-  enterOnboarding({ mode: "setup", returnTo: "home" });
-} else if (!stored?.onboardingComplete || !stored?.user?.name) {
-  enterOnboarding({ mode: "setup", returnTo: "home" });
-} else if (screens[initialScreen]) {
-  handleCheckoutReturnFromHash();
-  showScreen(initialScreen);
-} else {
+function bootFromSplash() {
+  const shouldOnboard = Boolean(invite?.join) || !stored?.onboardingComplete || !stored?.user?.name;
+  if (shouldOnboard) {
+    enterOnboarding({ mode: "setup", returnTo: "home" });
+    return;
+  }
+  if (screens[initialScreen]) {
+    handleCheckoutReturnFromHash();
+    showScreen(initialScreen);
+    return;
+  }
   showScreen("home");
 }
+
+showScreen("splash");
+window.setTimeout(bootFromSplash, 900);
