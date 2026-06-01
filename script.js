@@ -1325,7 +1325,7 @@ function showScreen(name) {
   if (screen instanceof HTMLElement) screen.focus();
 
   const frame = document.querySelector(".device-frame");
-  if (frame) frame.classList.toggle("onboarding", name === "onboard");
+  if (frame) frame.classList.toggle("onboarding", name === "onboard" || name === "splash");
   if (frame) frame.classList.toggle("camera-full", name === "camera");
   if (name === "camera") {
     state.cameraUiHidden = true;
