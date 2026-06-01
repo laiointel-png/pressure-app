@@ -1488,6 +1488,21 @@ svg {
   height: 100%;
 }
 
+.camera-tap-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.camera-tap-layer:focus-visible {
+  outline: 3px solid rgba(255, 94, 58, 0.7);
+  outline-offset: -3px;
+}
+
 .camera-video {
   z-index: 0;
   object-fit: cover;
@@ -1505,17 +1520,25 @@ svg {
   pointer-events: none;
 }
 
-.camera-stage > *:not(.camera-video):not(.vision-overlay) {
+.camera-stage > *:not(.camera-video):not(.vision-overlay):not(.camera-tap-layer) {
   position: relative;
   z-index: 2;
 }
 
-.device-frame.camera-full .camera-stage > *:not(.camera-video):not(.vision-overlay) {
+.device-frame.camera-full .camera-stage > *:not(.camera-video):not(.vision-overlay):not(.camera-tap-layer) {
   display: none !important;
 }
 
-.device-frame.camera-full .camera-actions {
+.device-frame.camera-full.camera-ui-hidden .camera-actions {
   display: none !important;
+}
+
+.device-frame.camera-full:not(.camera-ui-hidden) .camera-actions {
+  display: flex !important;
+  position: absolute;
+  inset-inline: 18px;
+  bottom: 18px;
+  z-index: 5;
 }
 
 .device-frame.camera-full:not(.camera-ui-hidden) .camera-top {

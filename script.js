@@ -645,9 +645,16 @@ async function copyCurrentInviteLink() {
 
 function consumeJoinInviteFromUrl() {
   const url = new URL(window.location.href);
-  const join = url.searchParams.get("join")?.trim() || "";
-  const apiBase = normalizeApiBase(url.searchParams.get("apiBase") || url.searchParams.get("api") || "");
-  const groupPayload = decodeInvitePayload(url.searchParams.get("g") || "");
+  let join = url.searchParams.get("join")?.trim() || "";
+  let apiBase = normalizeApiBase(url.searchParams.get("apiBase") || url.searchParams.get("api") || "");
+  let groupPayload = decodeInvitePayload(url.searchParams.get("g") || "");
+
+  if (!join && url.hash) {
+    const { params } = parseHashRoute(url.hash);
+    join = String(params.get("join") || "").trim();
+    apiBase = apiBase || normalizeApiBase(params.get("apiBase") || params.get("api") || "");
+    groupPayload = groupPayload || decodeInvitePayload(params.get("g") || "");
+  }
   if (!join) return null;
 
   url.searchParams.delete("join");
@@ -1197,6 +1204,10 @@ function clearOnboardingDraft() {
 }
 
 function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
+  if (splashBootTimer) {
+    window.clearTimeout(splashBootTimer);
+    splashBootTimer = null;
+  }
   state.onboardingMode = mode;
   state.onboardingReturnTo = returnTo;
   const invite = state.pendingInvite;
@@ -1283,6 +1294,10 @@ function syncNav(activeName) {
 }
 
 function showScreen(name) {
+  if (name !== "splash" && splashBootTimer) {
+    window.clearTimeout(splashBootTimer);
+    splashBootTimer = null;
+  }
   const screen = screens[name] || screens.home;
   const screenList = Object.values(screens).filter((item) => item && item.classList);
   screenList.forEach((item) => item.classList.remove("active"));
@@ -2765,9 +2780,13 @@ async function startVision() {
   const video = document.querySelector("#camera-video");
   if (!video) return;
 
-  if (!video.dataset.pressureTapBound) {
-    video.dataset.pressureTapBound = "1";
-    video.addEventListener("click", () => {
+  const tapLayer = document.querySelector("#camera-ui-toggle");
+  const stage = document.querySelector(".camera-stage");
+  const tapTarget = tapLayer || stage || video;
+
+  if (tapTarget instanceof HTMLElement && !tapTarget.dataset.pressureTapBound) {
+    tapTarget.dataset.pressureTapBound = "1";
+    tapTarget.addEventListener("click", () => {
       state.cameraUiHidden = !state.cameraUiHidden;
       syncCameraUiVisibility();
     });
@@ -2787,14 +2806,24 @@ async function startVision() {
 
   if (!vision.stream && navigator.mediaDevices?.getUserMedia) {
     try {
-      vision.stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "user" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      const baseVideoConstraints = {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      };
+
+      // Prefer the selfie camera. Some mobile browsers ignore `ideal: "user"` and still pick the back camera,
+      // so try `exact` first, then fall back to `ideal`.
+      try {
+        vision.stream = await navigator.mediaDevices.getUserMedia({
+          video: { ...baseVideoConstraints, facingMode: { exact: "user" } },
+          audio: false,
+        });
+      } catch {
+        vision.stream = await navigator.mediaDevices.getUserMedia({
+          video: { ...baseVideoConstraints, facingMode: { ideal: "user" } },
+          audio: false,
+        });
+      }
       video.srcObject = vision.stream;
       video.classList.add("is-live");
       setLiveStatus("Camera preview actief");
@@ -4068,6 +4097,10 @@ document.querySelector("#open-camera").addEventListener("click", openCamera);
 document.querySelector("#open-camera-secondary").addEventListener("click", openCamera);
 document.querySelector("#current-exercise-row").addEventListener("click", openCamera);
 document.querySelector("#nav-verify").addEventListener("click", openCamera);
+document.querySelector("#camera-ui-toggle")?.addEventListener("click", () => {
+  state.cameraUiHidden = !state.cameraUiHidden;
+  syncCameraUiVisibility();
+});
 document.querySelector("#simulate-verify").addEventListener("click", acceptCurrentExercise);
 document.querySelector("#switch-exercise").addEventListener("click", scanAgain);
 
@@ -5113,6 +5146,7 @@ bootstrapBackendSync();
 
 const stored = loadModel();
 const { screen: initialScreen } = parseHashRoute();
+let splashBootTimer = null;
 function bootFromSplash() {
   const shouldOnboard = Boolean(invite?.join) || !stored?.onboardingComplete || !stored?.user?.name;
   if (shouldOnboard) {
@@ -5128,4 +5162,7 @@ function bootFromSplash() {
 }
 
 showScreen("splash");
-window.setTimeout(bootFromSplash, 900);
+const { screen: bootScreen } = parseHashRoute();
+// Fast-path for test + deep link routes: go straight to onboarding if explicitly requested.
+const bootDelay = bootScreen === "onboard" ? 0 : 900;
+splashBootTimer = window.setTimeout(bootFromSplash, bootDelay);

@@ -1,7 +1,10 @@
 .DS_Store
 node_modules/
 dist/
+.playwright-mcp/
+test-results/
 .venv/
 *.pth
 *.pyc
 __pycache__/
+pressure-trace-gate.png

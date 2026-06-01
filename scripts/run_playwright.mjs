@@ -8,9 +8,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const root = path.resolve(__dirname, "..");
 
-const port = Number(process.env.PRESSURE_PORT || 5173);
+const preferredPort = Number(process.env.PRESSURE_PORT || 5173);
 const host = "127.0.0.1";
-const baseURL = `http://${host}:${port}`;
+let baseURL = null;
 
 function contentType(filePath) {
   if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
@@ -44,7 +44,7 @@ function serveFile(res, filePath) {
 function createServer() {
   return http.createServer((req, res) => {
     try {
-      const url = new URL(req.url || "/", baseURL);
+      const url = new URL(req.url || "/", baseURL || `http://${host}:${preferredPort}`);
       const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
       const filePath = safeJoin(root, pathname);
       if (!filePath) {
@@ -86,15 +86,40 @@ function runPlaywright(args) {
   });
 }
 
-const server = createServer();
-server.listen(port, host, async () => {
-  console.log(`pressure test server: ${baseURL}`);
-  try {
-    const headed = process.argv.includes("--headed");
-    await runPlaywright(headed ? ["--headed"] : []);
-    server.close(() => process.exit(0));
-  } catch (err) {
-    console.error("playwright failed");
-    server.close(() => process.exit(1));
-  }
-});
+async function startServer() {
+  const server = createServer();
+  return await new Promise((resolve, reject) => {
+    let resolved = false;
+
+    server.on("error", (err) => {
+      if (!resolved && err && err.code === "EADDRINUSE") {
+        server.close(() => {
+          const fallback = createServer();
+          fallback.on("error", reject);
+          fallback.listen(0, host, () => resolve(fallback));
+        });
+        return;
+      }
+      reject(err);
+    });
+
+    server.listen(preferredPort, host, () => {
+      resolved = true;
+      resolve(server);
+    });
+  });
+}
+
+const server = await startServer();
+const actualPort = server.address()?.port || preferredPort;
+baseURL = `http://${host}:${actualPort}`;
+console.log(`pressure test server: ${baseURL}`);
+
+try {
+  const headed = process.argv.includes("--headed");
+  await runPlaywright(headed ? ["--headed"] : []);
+  server.close(() => process.exit(0));
+} catch {
+  console.error("playwright failed");
+  server.close(() => process.exit(1));
+}
