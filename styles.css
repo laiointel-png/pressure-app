@@ -1518,6 +1518,14 @@ svg {
   display: none !important;
 }
 
+.device-frame.camera-full:not(.camera-ui-hidden) .camera-top {
+  display: grid !important;
+}
+
+.device-frame.camera-full.camera-ui-hidden .camera-top {
+  display: none !important;
+}
+
 .device-frame.camera-full .camera-stage {
   margin: 0;
   padding: 0;

@@ -50,6 +50,7 @@ const state = {
   form: 88,
   visionMode: "demo",
   cameraPaused: false,
+  cameraUiHidden: true,
   sheetAction: null,
   sheetLastFocus: null,
   paymentSetup: false,
@@ -1326,6 +1327,18 @@ function showScreen(name) {
   const frame = document.querySelector(".device-frame");
   if (frame) frame.classList.toggle("onboarding", name === "onboard");
   if (frame) frame.classList.toggle("camera-full", name === "camera");
+  if (name === "camera") {
+    state.cameraUiHidden = true;
+    syncCameraUiVisibility();
+  } else if (frame) {
+    frame.classList.remove("camera-ui-hidden");
+  }
+}
+
+function syncCameraUiVisibility() {
+  const frame = document.querySelector(".device-frame");
+  if (!frame) return;
+  frame.classList.toggle("camera-ui-hidden", Boolean(state.cameraUiHidden));
 }
 
 let billingBootstrapTimer = null;
@@ -2751,6 +2764,14 @@ async function detectFrame() {
 async function startVision() {
   const video = document.querySelector("#camera-video");
   if (!video) return;
+
+  if (!video.dataset.pressureTapBound) {
+    video.dataset.pressureTapBound = "1";
+    video.addEventListener("click", () => {
+      state.cameraUiHidden = !state.cameraUiHidden;
+      syncCameraUiVisibility();
+    });
+  }
 
   if (!vision.raf) {
     vision.lastDetections = demoDetections();
