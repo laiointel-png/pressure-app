@@ -1,6 +1,25 @@
-# RF-DETR Vision Integration
+# Vision Integration
 
-The mobile prototype has a camera intelligence layer that is ready to connect to RF-DETR.
+The mobile prototype now uses a pose-first camera intelligence layer for body tracking, movement analysis, and trace gating. RF-DETR remains an optional backend-enhanced path.
+
+## Primary flow
+
+`script.js` first tries to load the browser pose stack:
+
+- `@mediapipe/tasks-vision`
+- `PoseLandmarker`
+- `pose_landmarker_lite.task`
+
+When the model loads, the app reads full-body landmarks from the front camera and uses them to drive:
+
+- skeleton overlay rendering
+- person/full-body visibility checks
+- motion scoring
+- trace readiness and accept gating
+
+## Optional RF-DETR path
+
+The previous RF-DETR adapter remains available for remote backend detection if you want to keep a server-based fallback.
 
 ## How the app uses it
 
@@ -60,4 +79,4 @@ The local FastAPI example caches RF-DETR weights outside the repository at `~/.c
 
 ## Local demo mode
 
-If no endpoint is configured, unavailable, or returns no detections, the app stays usable with a local demo detector. It shows the same UI states and overlay shape, but labels are simulated.
+If the pose model or endpoint is unavailable, the app stays usable with a local demo detector. It shows the same UI states and overlay shape, but labels are simulated.

@@ -9,7 +9,8 @@ Live preview: https://laiointel-png.github.io/pressure-app/
 - Basic-Fit-inspired orange/black/white mobile UI
 - Working Today, Group, Check, Rank, Profile, Payment Model, and Create Group screens
 - Onboarding flow with persisted user + group config (localStorage)
-- RF-DETR-ready live camera verification adapter with demo fallback
+- Pose-first live camera verification with MediaPipe body landmarks and demo fallback
+- Optional RF-DETR remote detection adapter for backend-enhanced verification
 - Payment-safe beta model: subscription + platform miss fee, no cash pot, no wallet, no winner payout
 - Group creation form, payment model choices, setup simulation, and transparent fee ledger
 
@@ -36,15 +37,16 @@ Real-photo fallback assets are stored in `assets/` and are sourced from Pexels w
 - `trace-athlete-lunge.jpg`: https://www.pexels.com/photo/focused-athlete-performing-lunges-with-dumbbells-33185468/
 - `trace-athlete-squat.jpg`: https://www.pexels.com/photo/woman-performing-squats-in-modern-gym-setting-29259728/
 
-## RF-DETR camera intelligence
+## Camera intelligence
 
-The camera screen includes a RF-DETR-ready vision adapter:
+The camera screen now uses a pose-first vision layer:
 
 - Live camera preview through `getUserMedia`
-- Canvas detection overlay
-- Detection chips for person/body/workout context
-- Automatic local RF-DETR endpoint connection on `http://localhost:8000/api/rfdetr/detect`
-- Local demo detector when the backend is unavailable or returns no detections
+- MediaPipe Pose Landmarker on the front camera for body landmarks
+- Skeleton overlay and movement scoring
+- Detection chips for person/body/motion context
+- Optional RF-DETR endpoint connection on `http://localhost:8000/api/rfdetr/detect`
+- Local demo detector when the pose model or backend is unavailable
 
 See `docs/rfdetr-integration.md` and `backend/rfdetr_api_example.py`.
 

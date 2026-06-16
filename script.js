@@ -255,6 +255,39 @@ async function getSupabaseClient() {
   return supabaseClientPromise;
 }
 
+async function ensurePoseLandmarker() {
+  if (vision.poseLandmarker) return vision.poseLandmarker;
+  if (vision.poseLoadPromise) return vision.poseLoadPromise;
+
+  vision.poseLoadPromise = (async () => {
+    const { FilesetResolver, PoseLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm");
+    const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
+    const landmarker = await PoseLandmarker.createFromOptions(fileset, {
+      baseOptions: {
+        modelAssetPath: poseModelUrl,
+      },
+      runningMode: "VIDEO",
+      numPoses: 1,
+      minPoseDetectionConfidence: 0.45,
+      minPosePresenceConfidence: 0.45,
+      minTrackingConfidence: 0.45,
+      outputSegmentationMasks: false,
+    });
+    vision.poseLandmarker = landmarker;
+    return landmarker;
+  })();
+
+  try {
+    return await vision.poseLoadPromise;
+  } catch (error) {
+    console.warn("pose_landmarker_init_failed", error);
+    vision.poseLandmarker = null;
+    return null;
+  } finally {
+    vision.poseLoadPromise = null;
+  }
+}
+
 async function refreshSupabaseSession({ silent = true } = {}) {
   const client = await getSupabaseClient();
   if (!client) {
@@ -1001,7 +1034,16 @@ const vision = {
   traceTimer: null,
   raf: null,
   lastDetections: [],
+  lastPoseLandmarks: [],
+  poseLandmarker: null,
+  poseLoadPromise: null,
+  poseLastVideoTime: -1,
+  poseMotionScore: 0,
+  poseCoverageScore: 0,
 };
+
+const poseModelUrl =
+  "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task";
 
 const exercises = [
   {
@@ -2530,6 +2572,106 @@ function detectionTags(detections) {
   return [...bestByLabel.values()].sort((a, b) => b.confidence - a.confidence).slice(0, 4);
 }
 
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function visibilityOf(landmark) {
+  return Number(landmark?.visibility ?? landmark?.presence ?? 0);
+}
+
+function buildPoseBox(landmarks = []) {
+  const points = landmarks.filter((landmark) => visibilityOf(landmark) >= 0.35);
+  if (!points.length) return null;
+
+  const xs = points.map((landmark) => Number(landmark.x ?? 0));
+  const ys = points.map((landmark) => Number(landmark.y ?? 0));
+  const minX = clampNumber(Math.min(...xs), 0, 1);
+  const maxX = clampNumber(Math.max(...xs), 0, 1);
+  const minY = clampNumber(Math.min(...ys), 0, 1);
+  const maxY = clampNumber(Math.max(...ys), 0, 1);
+  const padX = Math.max(0.04, (maxX - minX) * 0.12);
+  const padY = Math.max(0.05, (maxY - minY) * 0.12);
+  const left = clampNumber(minX - padX, 0, 1);
+  const top = clampNumber(minY - padY, 0, 1);
+  const right = clampNumber(maxX + padX, 0, 1);
+  const bottom = clampNumber(maxY + padY, 0, 1);
+
+  return {
+    x: left,
+    y: top,
+    width: clampNumber(right - left, 0.1, 1),
+    height: clampNumber(bottom - top, 0.1, 1),
+  };
+}
+
+function poseCoverageScore(landmarks = []) {
+  const tracked = [11, 12, 23, 24, 25, 26, 27, 28]
+    .map((index) => landmarks[index])
+    .filter((landmark) => landmark && visibilityOf(landmark) >= 0.35).length;
+  return clampNumber(Math.round((tracked / 8) * 100), 0, 100);
+}
+
+function poseMotionScore(landmarks = []) {
+  if (!Array.isArray(landmarks) || !landmarks.length) return 0;
+
+  const indices = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28];
+  const tracked = indices.map((index) => landmarks[index]).filter((landmark) => landmark && visibilityOf(landmark) >= 0.35);
+  if (tracked.length < 3) return 0;
+
+  const previous = vision.lastPoseLandmarks || [];
+  if (!previous.length) return 18;
+
+  let totalDelta = 0;
+  let count = 0;
+  indices.forEach((index) => {
+    const current = landmarks[index];
+    const previousLandmark = previous[index];
+    if (!current || !previousLandmark) return;
+    totalDelta += Math.abs(Number(current.x ?? 0) - Number(previousLandmark.x ?? 0));
+    totalDelta += Math.abs(Number(current.y ?? 0) - Number(previousLandmark.y ?? 0));
+    count += 1;
+  });
+
+  if (!count) return 0;
+  const averageDelta = totalDelta / (count * 2);
+  return clampNumber(Math.round(averageDelta * 1200), 0, 100);
+}
+
+function poseResultToDetections(result) {
+  const landmarks = Array.isArray(result?.landmarks?.[0]) ? result.landmarks[0] : [];
+  const box = buildPoseBox(landmarks);
+  if (!box) {
+    vision.lastPoseLandmarks = [];
+    vision.poseCoverageScore = 0;
+    vision.poseMotionScore = 0;
+    return { detections: [], landmarks: [] };
+  }
+
+  const coverage = poseCoverageScore(landmarks);
+  const motion = poseMotionScore(landmarks);
+  vision.lastPoseLandmarks = landmarks;
+  vision.poseCoverageScore = coverage;
+  vision.poseMotionScore = motion;
+
+  return {
+    detections: [
+      { label: "person", confidence: clampNumber(0.55 + coverage / 200, 0.55, 0.99), ...box },
+      {
+        label: "full body",
+        confidence: clampNumber((coverage * 0.6 + (box.height > 0.6 ? 20 : 8) + (motion < 30 ? 12 : 0)) / 100, 0.35, 0.98),
+        ...box,
+      },
+      {
+        label: motion < 20 ? "steady posture" : "movement",
+        confidence: clampNumber((motion / 100) * 0.8 + 0.2, 0.2, 0.98),
+        ...box,
+      },
+    ],
+    landmarks,
+  };
+}
+
 function updateVisionUI(detections = []) {
   const status = document.querySelector("#vision-status");
   const tags = document.querySelector("#vision-tags");
@@ -2540,7 +2682,7 @@ function updateVisionUI(detections = []) {
   const tagItems = detectionTags(detected);
   const hasPerson = detected.some(isPersonDetection);
   const hasBody = detected.some((item) => item.label.toLowerCase().includes("body"));
-  const mode = state.visionMode === "rfdetr" ? "RF-DETR live" : "Demo";
+  const mode = state.visionMode === "rfdetr" ? "RF-DETR live" : state.visionMode === "pose" ? "Pose live" : "Demo";
 
   status.className = "vision-status";
   if (hasPerson && hasBody) status.classList.add("live");
@@ -2557,7 +2699,7 @@ function updateVisionUI(detections = []) {
 
   summary.textContent =
     hasPerson && hasBody
-      ? "Full body is zichtbaar. Deze check kan meetellen."
+      ? "Full body is zichtbaar. De trace kan meetellen."
       : "Stap verder naar achteren tot je hele lichaam zichtbaar is.";
 
   setText("#form-score", hasBody ? `${state.form}%` : "Hold");
@@ -2576,7 +2718,14 @@ function traceDetectionState() {
   const detections = currentTraceDetections();
   const hasPerson = detections.some(isPersonDetection);
   const hasBody = detections.some((item) => item.label.toLowerCase().includes("body"));
-  const canProgress = activeCameraScreen() && !state.cameraPaused && hasPerson && hasBody && state.todayChecks < exercises.length;
+  const coverageReady = state.visionMode === "pose" ? vision.poseCoverageScore >= 35 : hasBody;
+  const canProgress =
+    activeCameraScreen() &&
+    !state.cameraPaused &&
+    hasPerson &&
+    hasBody &&
+    coverageReady &&
+    state.todayChecks < exercises.length;
   return { detections, hasPerson, hasBody, canProgress };
 }
 
@@ -2607,7 +2756,7 @@ function updateTraceGateUI() {
 
   setText("#trace-timer", ready ? "DONE" : `00:${String(leftSeconds).padStart(2, "0")}`);
   setText("#trace-hint", ready ? "Trace locked. Je kunt deze oefening nu accepteren." : "Blijf in beeld. De check opent pas na 10 seconden live trace.");
-  setText("#motion-score", state.cameraPaused ? "Pauze" : ready ? "Ready" : canProgress ? "Live" : "Wacht");
+  setText("#motion-score", state.cameraPaused ? "Pauze" : ready ? "Ready" : canProgress ? `${vision.poseMotionScore || 0}%` : "Wacht");
 
   setTraceLine(
     "#full-body-line",
@@ -2687,6 +2836,47 @@ function drawVisionOverlay(detections = []) {
   ctx.save();
   ctx.scale(scale, scale);
 
+  if (vision.lastPoseLandmarks?.length) {
+    const connections = [
+      [11, 12],
+      [11, 13],
+      [13, 15],
+      [12, 14],
+      [14, 16],
+      [11, 23],
+      [12, 24],
+      [23, 24],
+      [23, 25],
+      [25, 27],
+      [24, 26],
+      [26, 28],
+      [11, 24],
+      [12, 23],
+    ];
+
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(255,90,0,0.92)";
+    connections.forEach(([startIndex, endIndex]) => {
+      const start = vision.lastPoseLandmarks[startIndex];
+      const end = vision.lastPoseLandmarks[endIndex];
+      if (!start || !end || visibilityOf(start) < 0.35 || visibilityOf(end) < 0.35) return;
+      ctx.beginPath();
+      ctx.moveTo(start.x * rect.width, start.y * rect.height);
+      ctx.lineTo(end.x * rect.width, end.y * rect.height);
+      ctx.stroke();
+    });
+
+    vision.lastPoseLandmarks.forEach((landmark) => {
+      if (visibilityOf(landmark) < 0.35) return;
+      const x = landmark.x * rect.width;
+      const y = landmark.y * rect.height;
+      ctx.beginPath();
+      ctx.fillStyle = "#ffffff";
+      ctx.arc(x, y, 3.6, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
   detections.forEach((detection) => {
     const x = detection.x * rect.width;
     const y = detection.y * rect.height;
@@ -2734,9 +2924,44 @@ async function detectFrame() {
   if (state.cameraPaused) return;
 
   if (!vision.endpoint) {
-    state.visionMode = "demo";
-    vision.lastDetections = demoDetections();
+    const landmarker = vision.poseLandmarker || (await ensurePoseLandmarker());
+    if (!landmarker) {
+      state.visionMode = "demo";
+      vision.lastDetections = demoDetections();
+      vision.lastPoseLandmarks = [];
+      updateVisionUI(vision.lastDetections);
+      updateTraceGateUI();
+      return;
+    }
+
+    const video = document.querySelector("#camera-video");
+    if (!video || video.readyState < 2) {
+      state.visionMode = "pose";
+      vision.lastDetections = demoDetections();
+      updateVisionUI(vision.lastDetections);
+      updateTraceGateUI();
+      return;
+    }
+
+    const timestampMs = Math.floor(performance.now());
+    if (timestampMs === vision.poseLastVideoTime) return;
+    vision.poseLastVideoTime = timestampMs;
+
+    try {
+      const result = landmarker.detectForVideo(video, timestampMs);
+      const analysis = poseResultToDetections(result);
+      state.visionMode = "pose";
+      vision.lastDetections = analysis.detections.length ? analysis.detections : demoDetections();
+      if (!analysis.landmarks.length) vision.lastPoseLandmarks = [];
+    } catch (error) {
+      console.warn("pose_detection_failed", error);
+      state.visionMode = "demo";
+      vision.lastDetections = demoDetections();
+      vision.lastPoseLandmarks = [];
+    }
+
     updateVisionUI(vision.lastDetections);
+    updateTraceGateUI();
     return;
   }
 
@@ -2766,10 +2991,12 @@ async function detectFrame() {
       throw new Error(payload?.message || "RF-DETR returned no detections");
     }
     vision.lastDetections = detections;
+    vision.lastPoseLandmarks = [];
     state.visionMode = "rfdetr";
   } catch {
     state.visionMode = "demo";
     vision.lastDetections = demoDetections();
+    vision.lastPoseLandmarks = [];
   }
 
   updateVisionUI(vision.lastDetections);
@@ -2779,6 +3006,11 @@ async function detectFrame() {
 async function startVision() {
   const video = document.querySelector("#camera-video");
   if (!video) return;
+
+  vision.poseLastVideoTime = -1;
+  vision.lastPoseLandmarks = [];
+  vision.poseCoverageScore = 0;
+  vision.poseMotionScore = 0;
 
   const tapLayer = document.querySelector("#camera-ui-toggle");
   const stage = document.querySelector(".camera-stage");
@@ -2800,9 +3032,10 @@ async function startVision() {
 
   if (!vision.timer) {
     detectFrame();
-    vision.timer = window.setInterval(detectFrame, 1400);
+    vision.timer = window.setInterval(detectFrame, 650);
   }
   startTraceGate();
+  void ensurePoseLandmarker();
 
   if (!vision.stream && navigator.mediaDevices?.getUserMedia) {
     try {
