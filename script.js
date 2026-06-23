@@ -35,7 +35,7 @@ const state = {
     deadline: "22:00",
     feeLabel: "EUR 10",
     destinationLabel: "Platform fee, geen cash-out",
-    membersCount: 4,
+    membersCount: 1,
   },
   apiBase: "",
   streak: 11,
@@ -201,7 +201,7 @@ function saveModel(next) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
   } catch {
-    // ignore storage quota errors in prototype
+    // ignore storage quota errors in constrained browser contexts
   }
   return merged;
 }
@@ -406,7 +406,7 @@ function normalizeBackendGroup(raw) {
     deadline: raw.deadline || "22:00",
     feeLabel: raw.feeLabel || raw.fee_label || "EUR 10",
     destinationLabel: raw.destinationLabel || raw.destination_label || "Platform fee, geen cash-out",
-    membersCount: Number(raw.membersCount ?? raw.members_count ?? 4) || 4,
+    membersCount: Number(raw.membersCount ?? raw.members_count ?? 1) || 1,
     joinCode,
   };
 }
@@ -1164,9 +1164,9 @@ function closeSheet() {
   state.sheetLastFocus = null;
 }
 
-function resetToDemo() {
+function resetToLocalSetup() {
   state.user = { ...state.user, name: "Jij", email: "", initial: "Y" };
-  state.group = { ...state.group, name: "Jouw Pressure Team", deadline: "22:00", feeLabel: "EUR 10" };
+  state.group = { ...state.group, name: "Jouw Pressure Team", deadline: "22:00", feeLabel: "EUR 10", membersCount: 1 };
   state.groups = {};
   state.activeGroupId = state.group.id;
   upsertGroup(state.group);
@@ -1792,11 +1792,7 @@ function persistCoreState() {
   });
 }
 
-const demoRoster = [
-  { userId: "user_mila", displayName: "Mila", initial: "M", checksCompleted: 4 },
-  { userId: "user_timothy", displayName: "Timothy", initial: "T", checksCompleted: 0 },
-  { userId: "user_layo", displayName: "Layo", initial: "L", checksCompleted: 3 },
-];
+const seedRoster = [];
 
 function memberTone(member) {
   if (member.checksCompleted >= exercises.length) return "done";
@@ -1826,7 +1822,7 @@ function buildRoster(checkins = []) {
         initial: member.initial,
         checksCompleted: member.userId === state.user.id ? state.todayChecks : 0,
       }))
-    : demoRoster.map((member) => ({ ...member }));
+    : seedRoster.map((member) => ({ ...member }));
 
   const base = [...baseMembers];
   if (!base.some((member) => member.userId === state.user.id)) {
@@ -1889,6 +1885,10 @@ function renderMemberList(checkins = []) {
   );
 
   const remaining = roster.filter((member) => member.checksCompleted < exercises.length).length;
+  if (roster.length <= 1) {
+    setText("#group-hero-title", remaining ? "Jij bent aan zet" : "Je check is klaar");
+    return;
+  }
   setText("#group-hero-title", remaining === 1 ? "1 iemand moet nog checken" : `${remaining} mensen moeten nog checken`);
 }
 
@@ -2447,6 +2447,9 @@ function updateCamera() {
 function addFeedItem(title, subtitle, tone = "") {
   const feed = document.querySelector("#feed-list");
   if (!feed) return;
+
+  const empty = feed.querySelector("[data-empty-feed='true']");
+  if (empty) empty.remove();
 
   const row = document.createElement("article");
   row.className = `feed-row ${tone}`.trim();
@@ -3466,7 +3469,7 @@ function leaderboardStatsForMember(member) {
     .length;
   const baseWorkouts =
     userId === state.user.id ? Math.max(0, Number(state.verifiedCount || 0)) : Math.max(0, Number(member?.workouts || 0));
-  const workouts = baseWorkouts || (userId === "user_mila" ? 7 : userId === "user_layo" ? 5 : userId === "user_timothy" ? 2 : 3);
+  const workouts = baseWorkouts;
   const points = workouts * 4 - misses * 10;
   return { userId, displayName, workouts, misses, points };
 }
@@ -3477,8 +3480,7 @@ function renderLeaderboard() {
   list.innerHTML = "";
 
   const members = currentGroupMembers();
-  const fallback = demoRoster.map((item) => ({ ...item, userId: item.userId, displayName: item.displayName }));
-  const roster = members.length ? members : fallback;
+  const roster = members.length ? members : buildRoster([]);
 
   const stats = roster
     .map(leaderboardStatsForMember)
@@ -3621,21 +3623,22 @@ async function appendLedgerToSupabase(entry, { silent = true } = {}) {
 }
 
 function simulateMissFee() {
+  const displayName = state.user.name || "Jij";
   const entry = upsertLedgerEntryLocal({
     groupId: state.group.id,
     kind: "miss_fee",
-    userId: "user_timothy",
-    displayName: "Timothy",
+    userId: state.user.id,
+    displayName,
     amountCents: 1000,
     currency: "eur",
     status: "simulated",
-    description: `Timothy miss fee verwerkt als ${destinationLabel()}`,
+    description: `${displayName} miss fee verwerkt als ${destinationLabel()}`,
     createdAt: new Date().toISOString(),
   });
   if (entry) appendLedgerToPersistence(entry, { silent: true });
   syncLedgerUI();
 
-  addFeedItem("Timothy miste de deadline", `EUR 10 ${destinationLabel()}, geen pot`, "bad");
+  addFeedItem("Miss geregistreerd", `EUR 10 ${destinationLabel()}, geen pot`, "bad");
   showSheet({
     label: "Miss verwerkt",
     title: "Ledger bijgewerkt",
@@ -4369,7 +4372,7 @@ document.querySelector("#menu-button").addEventListener("click", () => {
   showSheet({
     label: "Menu",
     title: "Maak of beheer je groep",
-    message: "De beta heeft nu werkende schermen voor vandaag, groep, check, rank, profiel en betaalmodel.",
+    message: "Beheer je groep, checks, rank, profiel en betaalmodel vanuit één setup.",
     primary: "Maak groep",
     onPrimary: () => {
       const toggle = document.querySelector("#create-new-toggle");
@@ -4382,10 +4385,13 @@ document.querySelector("#menu-button").addEventListener("click", () => {
 });
 
 document.querySelector("#notifications-button").addEventListener("click", () => {
+  const left = remainingChecks();
   showSheet({
     label: "Meldingen",
-    title: "Timothy is bijna te laat",
-    message: "42 minuten tot commitment fee. In productie wordt dit een push-notification naar de groep.",
+    title: left ? "Je hebt nog checks open" : "Je bent vandaag klaar",
+    message: left
+      ? `Nog ${left} check${left === 1 ? "" : "s"} voor je workout telt. Team reminders verschijnen hier zodra leden zijn toegevoegd.`
+      : "Je streak is beschermd. Nieuwe teamupdates verschijnen hier zodra je groep actief is.",
     primary: "Open groep",
     onPrimary: () => showScreen("group"),
   });
@@ -4406,11 +4412,15 @@ document.querySelector("#invite-button").addEventListener("click", async () => {
 });
 
 document.querySelector("#send-reminder").addEventListener("click", () => {
-  addFeedItem("Reminder verstuurd", "Timothy en Layo krijgen een push", "");
+  const roster = currentGroupMembers().filter((member) => member.userId !== state.user.id);
+  const targetLabel = roster.length ? `${roster.length} teamlid${roster.length === 1 ? "" : "en"}` : "Nog geen teamleden";
+  addFeedItem("Reminder klaargezet", roster.length ? `${targetLabel} krijgen een push` : "Nodig eerst teamleden uit", "");
   showSheet({
     label: "Reminder",
-    title: "Groep krijgt een push",
-    message: "Iedereen die nog niet klaar is krijgt: 'Je hebt nog checks open. Breek de chain niet.'",
+    title: roster.length ? "Groep krijgt een push" : "Nog niemand om te herinneren",
+    message: roster.length
+      ? "Iedereen die nog niet klaar is krijgt: 'Je hebt nog checks open. Breek de chain niet.'"
+      : "Deel eerst je invite link. Daarna kun je reminders naar openstaande leden sturen.",
   });
 });
 
@@ -4446,7 +4456,7 @@ document.querySelector("#settings-button").addEventListener("click", () => {
     secondary: "Reset lokaal",
     onPrimary: () => enterOnboarding({ mode: "edit", returnTo: "profile" }),
     onSecondary: () => {
-      resetToDemo();
+      resetToLocalSetup();
       showScreen("home");
     },
   });
@@ -5063,12 +5073,12 @@ document.querySelector("#onboard-supabase-login")?.addEventListener("click", asy
 
 document.querySelector("#skip-onboarding")?.addEventListener("click", () => {
   if (state.onboardingMode === "edit") {
-    resetToDemo();
+    resetToLocalSetup();
     showScreen("home");
     return;
   }
 
-  resetToDemo();
+  resetToLocalSetup();
   clearOnboardingDraft();
   state.onboardingComplete = true;
   persistCoreState();

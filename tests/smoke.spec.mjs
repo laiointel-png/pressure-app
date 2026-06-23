@@ -41,7 +41,25 @@ test("navigate to group and open invite sheet", async ({ page }) => {
   await expect(page.locator("#action-sheet")).toHaveAttribute("aria-hidden", "false");
 });
 
-test("camera demo shows trace UI and accept disabled until ready", async ({ page }) => {
+test("product shell does not expose fixture names or demo labels", async ({ page }) => {
+  await page.goto("/#onboard");
+  await page.locator("#onboard-name").fill("Test User");
+  await page.locator("#onboard-email").fill("test@example.com");
+  await page.locator("#onboard-group-mode-create").check();
+  await page.locator("#onboard-group-name").fill("Smoke Team");
+  await page.locator("#onboard-submit").click();
+
+  await expect(page.locator("#screen-home")).toHaveClass(/active/);
+  await expect(page.locator("body")).not.toContainText(/Mila|Timothy|Layo|Team Iron Pact|Demo|Gebruik demo/);
+
+  await page.evaluate(() => {
+    window.location.hash = "#group";
+  });
+  await expect(page.locator("#screen-group")).toHaveClass(/active/);
+  await expect(page.locator("body")).not.toContainText(/Mila|Timothy|Layo|Team Iron Pact|Demo|Gebruik demo/);
+});
+
+test("camera local fallback shows trace UI and accept disabled until ready", async ({ page }) => {
   await page.goto("/#onboard");
   await page.locator("#onboard-name").fill("Test User");
   await page.locator("#onboard-email").fill("test@example.com");
@@ -61,7 +79,7 @@ test("camera demo shows trace UI and accept disabled until ready", async ({ page
 test("camera requests front camera + stage is full-screen with UI toggle", async ({ page }) => {
   await page.addInitScript(() => {
     const calls = [];
-    const fakeStream = {
+    const mockStream = {
       getTracks() {
         return [];
       },
@@ -70,7 +88,7 @@ test("camera requests front camera + stage is full-screen with UI toggle", async
     const mediaDevices = (navigator.mediaDevices ||= {});
     mediaDevices.getUserMedia = async (constraints) => {
       calls.push(constraints);
-      return fakeStream;
+      return mockStream;
     };
 
     window.__pressureGetUserMediaCalls = calls;

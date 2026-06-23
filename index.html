@@ -357,21 +357,13 @@
               <h2 id="feed-title">Wat je groep ziet</h2>
             </div>
             <div class="feed-list" id="feed-list">
-              <article class="feed-row good">
-                <div class="avatar">M</div>
+              <article class="feed-row" data-empty-feed="true">
+                <div class="avatar">P</div>
                 <div>
-                  <strong>Mila heeft 4/4 gehaald</strong>
-                  <span>Trace confidence 94%</span>
+                  <strong>Nog geen groepsupdates</strong>
+                  <span>Nodig je team uit; live checks verschijnen hier zodra iemand start of afrondt.</span>
                 </div>
-                <small>nu</small>
-              </article>
-              <article class="feed-row bad">
-                <div class="avatar danger">T</div>
-                <div>
-                  <strong>Timothy mist bijna</strong>
-                  <span>42 min tot commitment fee</span>
-                </div>
-                <small>14m</small>
+                <small>klaar</small>
               </article>
             </div>
           </section>
@@ -386,7 +378,7 @@
             </button>
             <div>
               <strong id="group-title">Jouw Pressure Team</strong>
-              <span id="group-subtitle">4 leden, daily check-in</span>
+              <span id="group-subtitle">1 lid, daily check-in</span>
             </div>
             <button class="icon-button" id="invite-button" type="button" aria-label="Invite link">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -399,8 +391,8 @@
 	          <section class="hero-card group-hero">
 	            <div class="hero-copy">
 	              <span class="section-label">Groep status</span>
-	              <h1 id="group-hero-title">2 mensen moeten nog checken</h1>
-	              <p>Stuur nu een reminder of open je eigen live check. Iedereen ziet de status.</p>
+	              <h1 id="group-hero-title">Jij bent als eerste aan zet</h1>
+	              <p>Nodig je team uit of open je eigen live check. Iedereen ziet straks dezelfde status.</p>
 	            </div>
 	            <div class="hero-actions">
 	              <button class="primary-button" id="send-reminder" type="button">Stuur reminder</button>
@@ -413,14 +405,6 @@
 
           <section class="content-card" aria-label="Groepsleden">
             <div class="member-list" id="member-list" role="list" aria-live="polite">
-              <article class="member-row done">
-                <div class="avatar">M</div>
-                <div>
-                  <strong>Mila</strong>
-                  <span>4/4 klaar</span>
-                </div>
-                <em>Klaar</em>
-              </article>
               <article class="member-row active">
                 <div class="avatar" id="group-user-avatar">Y</div>
                 <div>
@@ -428,22 +412,6 @@
                   <span id="group-user-status">2/4 klaar</span>
                 </div>
                 <em>Nu</em>
-              </article>
-              <article class="member-row warning">
-                <div class="avatar danger">T</div>
-                <div>
-                  <strong>Timothy</strong>
-                  <span>42 min over</span>
-                </div>
-                <em>Risico</em>
-              </article>
-              <article class="member-row">
-                <div class="avatar">L</div>
-                <div>
-                  <strong>Layo</strong>
-                  <span>3/4 klaar</span>
-                </div>
-                <em>Wacht</em>
               </article>
             </div>
             <form class="member-add" id="member-add-form" aria-labelledby="member-add-title">
@@ -461,7 +429,7 @@
                     type="text"
                     autocomplete="off"
                     inputmode="text"
-                    placeholder="Naam (bijv. Mila)"
+                    placeholder="Naam van teamlid"
                     aria-describedby="member-add-hint"
                     required
                   />
