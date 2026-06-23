@@ -13,7 +13,7 @@ const screens = {
 
 const state = {
   user: {
-    id: "user_demo",
+    id: "user_local",
     name: "Jij",
     email: "",
     initial: "Y",
@@ -30,7 +30,7 @@ const state = {
   membersByGroup: {},
   activeGroupId: "",
   group: {
-    id: "group_demo",
+    id: "group_local",
     name: "Jouw Pressure Team",
     deadline: "22:00",
     feeLabel: "EUR 10",
@@ -48,7 +48,7 @@ const state = {
   traceLastTickAt: 0,
   trust: 92,
   form: 88,
-  visionMode: "demo",
+  visionMode: "local",
   cameraPaused: false,
   cameraUiHidden: true,
   sheetAction: null,
@@ -207,9 +207,36 @@ function saveModel(next) {
 }
 
 function ensureIds() {
-  if (!state.user.id) state.user.id = newId("user");
-  if (!state.group.id) state.group.id = newId("group");
-  if (!state.activeGroupId) state.activeGroupId = state.group.id;
+  const previousUserId = String(state.user.id || "");
+  const previousGroupId = String(state.group.id || "");
+  if (!state.user.id || isLocalSeedUserId(state.user.id)) state.user.id = newId("user");
+  if (!state.group.id || isLocalSeedGroupId(state.group.id)) state.group.id = newId("group");
+
+  if (previousUserId && previousUserId !== state.user.id) {
+    Object.values(state.membersByGroup || {}).forEach((members) => {
+      if (!Array.isArray(members)) return;
+      members.forEach((member) => {
+        if (member?.userId === previousUserId) member.userId = state.user.id;
+      });
+    });
+  }
+
+  if (previousGroupId && previousGroupId !== state.group.id) {
+    const legacyGroup = state.groups?.[previousGroupId];
+    if (legacyGroup) {
+      state.groups[state.group.id] = { ...legacyGroup, id: state.group.id };
+      delete state.groups[previousGroupId];
+    }
+    const legacyMembers = state.membersByGroup?.[previousGroupId];
+    if (legacyMembers) {
+      state.membersByGroup[state.group.id] = legacyMembers;
+      delete state.membersByGroup[previousGroupId];
+    }
+  }
+
+  if (!state.activeGroupId || state.activeGroupId === previousGroupId || isLocalSeedGroupId(state.activeGroupId)) {
+    state.activeGroupId = state.group.id;
+  }
 }
 
 function newId(prefix) {
@@ -217,6 +244,14 @@ function newId(prefix) {
     globalThis.crypto?.randomUUID?.bind(globalThis.crypto) ||
     (() => `${Date.now().toString(16)}_${Math.random().toString(16).slice(2)}`);
   return `${prefix}_${uuid()}`;
+}
+
+function isLocalSeedUserId(id) {
+  return ["user_local", "user_demo"].includes(String(id || ""));
+}
+
+function isLocalSeedGroupId(id) {
+  return ["group_local", "group_demo"].includes(String(id || ""));
 }
 
 function normalizeSupabaseUrl(raw) {
@@ -2526,7 +2561,7 @@ function normalizeDetections(payload) {
     .filter((item) => item.confidence >= 0.35);
 }
 
-function demoDetections() {
+function localFallbackDetections() {
   const current = currentExercise();
   return [
     { label: "person", confidence: 0.96, x: 0.24, y: 0.18, width: 0.5, height: 0.68 },
@@ -2681,7 +2716,7 @@ function updateVisionUI(detections = []) {
   const summary = document.querySelector("#vision-summary");
   if (!status || !tags || !summary) return;
 
-  const detected = enrichDetections(detections.length ? detections : demoDetections());
+  const detected = enrichDetections(detections.length ? detections : localFallbackDetections());
   const tagItems = detectionTags(detected);
   const hasPerson = detected.some(isPersonDetection);
   const hasBody = detected.some((item) => item.label.toLowerCase().includes("body"));
@@ -2714,7 +2749,7 @@ function activeCameraScreen() {
 }
 
 function currentTraceDetections() {
-  return enrichDetections(vision.lastDetections.length ? vision.lastDetections : demoDetections());
+  return enrichDetections(vision.lastDetections.length ? vision.lastDetections : localFallbackDetections());
 }
 
 function traceDetectionState() {
@@ -2906,7 +2941,7 @@ function drawVisionOverlay(detections = []) {
 }
 
 function drawVisionLoop() {
-  const detections = vision.lastDetections.length ? enrichDetections(vision.lastDetections) : demoDetections();
+  const detections = vision.lastDetections.length ? enrichDetections(vision.lastDetections) : localFallbackDetections();
   drawVisionOverlay(detections);
   vision.raf = requestAnimationFrame(drawVisionLoop);
 }
@@ -2929,8 +2964,8 @@ async function detectFrame() {
   if (!vision.endpoint) {
     const landmarker = vision.poseLandmarker || (await ensurePoseLandmarker());
     if (!landmarker) {
-      state.visionMode = "demo";
-      vision.lastDetections = demoDetections();
+      state.visionMode = "local";
+      vision.lastDetections = localFallbackDetections();
       vision.lastPoseLandmarks = [];
       updateVisionUI(vision.lastDetections);
       updateTraceGateUI();
@@ -2940,7 +2975,7 @@ async function detectFrame() {
     const video = document.querySelector("#camera-video");
     if (!video || video.readyState < 2) {
       state.visionMode = "pose";
-      vision.lastDetections = demoDetections();
+      vision.lastDetections = localFallbackDetections();
       updateVisionUI(vision.lastDetections);
       updateTraceGateUI();
       return;
@@ -2954,12 +2989,12 @@ async function detectFrame() {
       const result = landmarker.detectForVideo(video, timestampMs);
       const analysis = poseResultToDetections(result);
       state.visionMode = "pose";
-      vision.lastDetections = analysis.detections.length ? analysis.detections : demoDetections();
+      vision.lastDetections = analysis.detections.length ? analysis.detections : localFallbackDetections();
       if (!analysis.landmarks.length) vision.lastPoseLandmarks = [];
     } catch (error) {
       console.warn("pose_detection_failed", error);
-      state.visionMode = "demo";
-      vision.lastDetections = demoDetections();
+      state.visionMode = "local";
+      vision.lastDetections = localFallbackDetections();
       vision.lastPoseLandmarks = [];
     }
 
@@ -2970,8 +3005,8 @@ async function detectFrame() {
 
   const image = captureFrame();
   if (!image) {
-    state.visionMode = "demo";
-    vision.lastDetections = demoDetections();
+    state.visionMode = "local";
+    vision.lastDetections = localFallbackDetections();
     updateVisionUI(vision.lastDetections);
     return;
   }
@@ -2997,8 +3032,8 @@ async function detectFrame() {
     vision.lastPoseLandmarks = [];
     state.visionMode = "rfdetr";
   } catch {
-    state.visionMode = "demo";
-    vision.lastDetections = demoDetections();
+    state.visionMode = "local";
+    vision.lastDetections = localFallbackDetections();
     vision.lastPoseLandmarks = [];
   }
 
@@ -3028,7 +3063,7 @@ async function startVision() {
   }
 
   if (!vision.raf) {
-    vision.lastDetections = demoDetections();
+    vision.lastDetections = localFallbackDetections();
     drawVisionLoop();
     updateVisionUI(vision.lastDetections);
   }
@@ -3065,7 +3100,7 @@ async function startVision() {
       setLiveStatus("Camera preview actief");
     } catch {
       video.classList.remove("is-live");
-      state.visionMode = "demo";
+      state.visionMode = "local";
       setLiveStatus("Camera toestemming niet beschikbaar. Lokale controle actief.");
     }
   }
@@ -3130,7 +3165,7 @@ function scanAgain() {
   resetTraceGate({ announce: true });
   state.form = currentExercise().form;
   state.trust = currentExercise().trust;
-  vision.lastDetections = demoDetections();
+  vision.lastDetections = localFallbackDetections();
   updateCamera();
 }
 
@@ -5150,8 +5185,8 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
     };
 
     if (state.onboardingMode !== "edit") {
-      if (!state.user.id || state.user.id === "user_demo") state.user.id = newId("user");
-      if (!state.group.id || state.group.id === "group_demo") state.group.id = newId("group");
+      if (!state.user.id || isLocalSeedUserId(state.user.id)) state.user.id = newId("user");
+      if (!state.group.id || isLocalSeedGroupId(state.group.id)) state.group.id = newId("group");
       state.activeGroupId = state.group.id;
     }
 
