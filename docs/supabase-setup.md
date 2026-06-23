@@ -1,6 +1,6 @@
 # Supabase setup (MVP)
 
-This repo ships as a static prototype (GitHub Pages). To make it a real app backend, Supabase is the simplest “free-first” path:
+This repo ships as a static GitHub Pages app. To make it a real backend-backed product, Supabase is the simplest “free-first” path:
 
 - Auth (magic link)
 - Postgres persistence (groups/members/checkins/ledger)

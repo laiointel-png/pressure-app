@@ -184,14 +184,14 @@
             </div>
             <div class="onboard-row tight hidden" id="onboard-billing-actions" aria-label="Billing acties">
               <button class="secondary-button full-width" id="onboard-open-billing" type="button">Open billing setup</button>
-              <span class="small-pill neutral" id="onboard-billing-pill" aria-label="Billing status">Demo</span>
+              <span class="small-pill neutral" id="onboard-billing-pill" aria-label="Billing status">Lokaal</span>
             </div>
             <small class="field-hint hidden" id="onboard-billing-hint">
-              Gebruik billing setup om (test) Stripe checkout + payment method (mandate) te koppelen. Zonder backend blijft dit demo-only.
+              Gebruik billing setup om Stripe checkout + payment method consent te koppelen. Zonder backend blijft betaling lokaal uitgeschakeld.
             </small>
             <p class="submit-status" id="onboard-submit-status" role="status" aria-live="polite"></p>
 	            <button class="primary-button full-width" id="onboard-submit" type="submit">Start Pressure</button>
-	            <button class="text-button full-width" id="skip-onboarding" type="button">Gebruik demo data</button>
+	            <button class="text-button full-width" id="skip-onboarding" type="button">Ga door zonder account</button>
 	          </form>
 	        </section>
 
@@ -206,7 +206,7 @@
             </button>
             <div>
               <strong>PRESSURE</strong>
-              <span id="home-group-title">Team Iron Pact</span>
+              <span id="home-group-title">Jouw Pressure Team</span>
             </div>
             <button class="icon-button" id="notifications-button" type="button" aria-label="Meldingen">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -385,7 +385,7 @@
               </svg>
             </button>
             <div>
-              <strong id="group-title">Team Iron Pact</strong>
+              <strong id="group-title">Jouw Pressure Team</strong>
               <span id="group-subtitle">4 leden, daily check-in</span>
             </div>
             <button class="icon-button" id="invite-button" type="button" aria-label="Invite link">
@@ -574,7 +574,7 @@
                   <span class="section-label">Camera controle</span>
                   <h3 id="vision-title">Wat ziet de app?</h3>
                 </div>
-                <span class="vision-status" id="vision-status">Demo</span>
+                <span class="vision-status" id="vision-status">Lokaal</span>
               </div>
               <div class="vision-tags" id="vision-tags" aria-label="Gedetecteerde objecten">
                 <span>person 96%</span>
@@ -714,7 +714,7 @@
           <section class="content-card rule-card" aria-labelledby="profile-backend-title">
             <span class="section-label">Backend</span>
             <h2 id="profile-backend-title">Sync & billing verbinden</h2>
-            <p>Gebruik een API base om groups, leden, check-ins en Stripe demo endpoints te syncen.</p>
+            <p>Gebruik een API base om groups, leden, check-ins en Stripe endpoints te syncen.</p>
             <label>
               <span>API base</span>
               <input
@@ -807,7 +807,7 @@
 	                <span class="section-label">Stripe setup</span>
 	                <h2 id="payment-setup-title">3 stappen tot echte betaling</h2>
 	              </div>
-	              <span class="small-pill" id="payment-status-pill">Demo</span>
+	              <span class="small-pill" id="payment-status-pill">Lokaal</span>
 	            </div>
 	            <div class="onboard-row tight">
 	              <button class="secondary-button full-width" id="billing-check-stripe" type="button">Check Stripe</button>
@@ -866,17 +866,17 @@
 	            <button class="primary-button full-width" id="setup-payment" type="button">Start Pressure Pass checkout</button>
               <button class="secondary-button full-width" id="setup-mandate" type="button">Sla payment method op voor miss fees</button>
             <button class="secondary-button full-width hidden" id="billing-open-portal" type="button">Beheer abonnement (Stripe)</button>
-            <small class="field-hint" id="billing-confirm-hint">Zonder backend blijft dit demo-only. Met backend + sk_test_ start je een echte test checkout.</small>
+            <small class="field-hint" id="billing-confirm-hint">Zonder backend wordt er niets afgeschreven. Met backend + Stripe test keys start je een veilige checkout.</small>
           </section>
 
 	          <section class="content-card" aria-labelledby="ledger-title">
 	            <div class="section-title row">
 	              <div>
-	                <span class="section-label">Ledger demo</span>
+	                <span class="section-label">Ledger</span>
 	                <h2 id="ledger-title">Transparant voor de groep</h2>
 	              </div>
 	              <div class="ledger-actions">
-	                <button class="text-button" id="simulate-miss-fee" type="button">Simuleer miss</button>
+	                <button class="text-button" id="simulate-miss-fee" type="button">Registreer miss</button>
 	                <button class="text-button" id="charge-miss-fee" type="button">Charge backend</button>
 	                <button class="text-button" id="settle-day" type="button">Verwerk misses</button>
 	              </div>
@@ -916,7 +916,7 @@
           <form class="content-card create-form" id="create-group-form">
             <label>
               <span>Groepsnaam</span>
-              <input id="group-name-input" type="text" value="Team Iron Pact" autocomplete="off" />
+              <input id="group-name-input" type="text" value="Jouw Pressure Team" autocomplete="off" />
             </label>
             <label class="checkbox-row">
               <input id="create-new-toggle" type="checkbox" checked />
@@ -952,7 +952,7 @@
           </form>
 	          <section class="content-card invite-preview">
 	            <span class="section-label">Invite preview</span>
-	            <h2 id="invite-preview-title">Team Iron Pact</h2>
+	            <h2 id="invite-preview-title">Jouw Pressure Team</h2>
 	            <p id="invite-preview-copy">Daily 4/4 live checks. Deadline 22:00. Fee EUR 10 als platform fee.</p>
 	            <div class="invite-link-row">
 	              <input id="invite-link-input" type="url" readonly inputmode="url" autocomplete="off" aria-label="Invite link" />

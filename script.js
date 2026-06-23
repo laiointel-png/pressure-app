@@ -31,7 +31,7 @@ const state = {
   activeGroupId: "",
   group: {
     id: "group_demo",
-    name: "Team Iron Pact",
+    name: "Jouw Pressure Team",
     deadline: "22:00",
     feeLabel: "EUR 10",
     destinationLabel: "Platform fee, geen cash-out",
@@ -888,7 +888,7 @@ function syncOnboardingBillingActions() {
 
   const mandateReady = Boolean(state.paymentMandateSetup || state.stripePaymentMethodId);
   const passReady = Boolean(state.stripeSubscriptionId);
-  const statusLabel = mandateReady ? "Mandate" : passReady ? "Pass" : "Demo";
+  const statusLabel = mandateReady ? "Mandate" : passReady ? "Pass" : "Lokaal";
 
   const pill = document.querySelector("#onboard-billing-pill");
   if (pill) {
@@ -961,7 +961,7 @@ async function testApiConnection(rawBase, { silent = false } = {}) {
       showSheet({
         label: "API",
         title: "Geen API base ingevuld",
-        message: "Zet een URL zoals http://localhost:8001 in om group sync + Stripe demo endpoints te testen.",
+        message: "Zet een URL zoals http://localhost:8001 in om group sync + Stripe endpoints te testen.",
       });
     }
     return;
@@ -1001,7 +1001,7 @@ async function testApiConnection(rawBase, { silent = false } = {}) {
         label: "API check",
         title: "Backend bereikbaar",
         message: `Groups: ${groupsReady ? "ok" : "uit"}. Payments: ${paymentsReady ? "ok" : "uit"}. Stripe: ${
-          stripeReady ? "ready" : "demo"
+          stripeReady ? "ready" : "niet gekoppeld"
         }.`,
       });
     }
@@ -1014,7 +1014,7 @@ async function testApiConnection(rawBase, { silent = false } = {}) {
       showSheet({
         label: "API",
         title: "Backend niet bereikbaar",
-        message: "Check of de server draait en CORS toestaat. UI blijft werken met localStorage demo state.",
+        message: "Check of de server draait en CORS toestaat. De app blijft lokaal werken.",
       });
     }
   }
@@ -1166,7 +1166,7 @@ function closeSheet() {
 
 function resetToDemo() {
   state.user = { ...state.user, name: "Jij", email: "", initial: "Y" };
-  state.group = { ...state.group, name: "Team Iron Pact", deadline: "22:00", feeLabel: "EUR 10" };
+  state.group = { ...state.group, name: "Jouw Pressure Team", deadline: "22:00", feeLabel: "EUR 10" };
   state.groups = {};
   state.activeGroupId = state.group.id;
   upsertGroup(state.group);
@@ -1262,7 +1262,7 @@ function enterOnboarding({ mode = "setup", returnTo = "home" } = {}) {
   if (submit) submit.textContent = mode === "edit" ? "Update setup" : "Start Pressure";
 
   const skip = document.querySelector("#skip-onboarding");
-  if (skip) skip.textContent = mode === "edit" ? "Reset naar demo" : "Gebruik demo data";
+  if (skip) skip.textContent = mode === "edit" ? "Reset lokale setup" : "Ga door zonder account";
 
   const nameField = document.querySelector("#onboard-name");
   const emailField = document.querySelector("#onboard-email");
@@ -1419,7 +1419,7 @@ function bootstrapBillingScreen({ force = false } = {}) {
       }
       syncPaymentModel();
     } catch {
-      // Silent bootstrap; billing stays demo/local-first.
+      // Silent bootstrap; billing stays local-first.
     }
   }, 50);
 }
@@ -1455,13 +1455,13 @@ async function checkStripeHealth({ silent = false } = {}) {
     } else if (liveDetected && !liveAllowed) {
       setStripeStatus("bad", "Live blocked");
     } else {
-      setStripeStatus("neutral", "Demo");
+      setStripeStatus("neutral", "Lokaal");
     }
 
     if (!silent) {
       showSheet({
         label: "Stripe",
-        title: ready ? "Stripe is ready" : "Stripe demo mode",
+        title: ready ? "Stripe is ready" : "Stripe niet gekoppeld",
         message: ready
           ? `API version ${payload?.api_version || "?"}. Mode ${payload?.stripe_mode || "?"}.`
           : "Stripe keys ontbreken, deps ontbreken, of live key is geblokkeerd. UI blijft payment-safe.",
@@ -1476,7 +1476,7 @@ async function checkStripeHealth({ silent = false } = {}) {
       showSheet({
         label: "Stripe",
         title: "Check mislukt",
-        message: "Backend niet bereikbaar of endpoint faalde. UI blijft in demo mode.",
+        message: "Backend niet bereikbaar of endpoint faalde. Betaling blijft uitgeschakeld.",
       });
     }
   }
@@ -1527,7 +1527,7 @@ async function fetchSetupSessionDetails(sessionId) {
     upsertProfileToBackend({ silent: true });
 
     showSheet({
-      label: intent?.mode === "stripe" ? "Stripe" : "Demo",
+      label: intent?.mode === "stripe" ? "Stripe" : "Lokaal",
       title: "Payment method opgeslagen",
       message: state.stripePaymentMethodId
         ? `Payment method: ${state.stripePaymentMethodId}. Backend kan nu miss fees off-session chargen.`
@@ -2115,7 +2115,7 @@ async function syncCheckinsFromBackend({ silent = true } = {}) {
       showSheet({
         label: "Sync",
         title: "Check-ins sync mislukt",
-        message: "Backend niet bereikbaar of CORS blokkeert `/api/checkins/...`. Demo lijst blijft zichtbaar.",
+        message: "Backend niet bereikbaar of CORS blokkeert `/api/checkins/...`. De lokale groepslijst blijft zichtbaar.",
       });
     }
     renderMemberList([]);
@@ -2158,7 +2158,7 @@ function maybeNotifyBillingCancel() {
   showSheet({
     label: "Checkout",
     title: "Checkout geannuleerd",
-    message: "Geen probleem. Je kunt later opnieuw starten. Demo state blijft actief zolang Stripe niet gekoppeld is.",
+    message: "Geen probleem. Je kunt later opnieuw starten. Zonder afgeronde checkout blijft betaling uitgeschakeld.",
   });
 }
 
@@ -2210,7 +2210,7 @@ async function openCustomerPortal() {
   }
 
   try {
-    const email = state.user.email || "demo@example.com";
+    const email = state.user.email || "";
     const returnUrl = `${window.location.origin}${window.location.pathname}#billing`;
     const payload = await api.post("/api/payments/customer-portal", {
       stripe_customer_id: state.stripeCustomerId,
@@ -2220,7 +2220,7 @@ async function openCustomerPortal() {
 
     const portalUrl = payload?.portal_url;
     showSheet({
-      label: payload?.mode === "stripe" ? "Stripe" : "Demo",
+      label: payload?.mode === "stripe" ? "Stripe" : "Backend",
       title: "Customer portal klaar",
       message: portalUrl ? "Open Stripe portal om je abonnement en payment method te beheren." : "Geen portal URL ontvangen.",
       primary: "Open portal",
@@ -2233,7 +2233,7 @@ async function openCustomerPortal() {
     showSheet({
       label: "Stripe",
       title: "Portal mislukt",
-      message: "Backend endpoint faalde of Stripe is niet ready. UI blijft in demo mode.",
+      message: "Backend endpoint faalde of Stripe is niet ready. Je abonnement is niet gewijzigd.",
     });
   } finally {
     if (button instanceof HTMLButtonElement) {
@@ -2287,7 +2287,7 @@ async function syncStripeIdsFromEmail({ silent = false } = {}) {
 
     if (!silent) {
       showSheet({
-        label: payload?.mode === "stripe" ? "Stripe" : "Demo",
+        label: payload?.mode === "stripe" ? "Stripe" : "Backend",
         title: customerId ? "Stripe IDs gesynced" : "Geen Stripe customer gevonden",
         message: customerId
           ? `Customer: ${customerId}${subscriptionId ? ` • Sub: ${subscriptionId}` : ""}.`
@@ -2295,7 +2295,7 @@ async function syncStripeIdsFromEmail({ silent = false } = {}) {
       });
     }
 
-    return { customerId, subscriptionId, mode: payload?.mode || "demo" };
+    return { customerId, subscriptionId, mode: payload?.mode || "local" };
   } catch {
     if (!silent) {
       showSheet({
@@ -2682,7 +2682,7 @@ function updateVisionUI(detections = []) {
   const tagItems = detectionTags(detected);
   const hasPerson = detected.some(isPersonDetection);
   const hasBody = detected.some((item) => item.label.toLowerCase().includes("body"));
-  const mode = state.visionMode === "rfdetr" ? "RF-DETR live" : state.visionMode === "pose" ? "Pose live" : "Demo";
+  const mode = state.visionMode === "rfdetr" ? "RF-DETR live" : state.visionMode === "pose" ? "Pose live" : "Lokaal";
 
   status.className = "vision-status";
   if (hasPerson && hasBody) status.classList.add("live");
@@ -3063,7 +3063,7 @@ async function startVision() {
     } catch {
       video.classList.remove("is-live");
       state.visionMode = "demo";
-      setLiveStatus("Camera toestemming niet beschikbaar. Demo controle actief.");
+      setLiveStatus("Camera toestemming niet beschikbaar. Lokale controle actief.");
     }
   }
 }
@@ -3147,7 +3147,7 @@ function syncPaymentModel() {
   const passReady = Boolean(state.paymentSetup);
   const mandateReady = Boolean(state.paymentMandateSetup || state.stripePaymentMethodId);
 
-  setText("#payment-status-pill", mandateReady ? "Mandate" : passReady ? "Pass" : "Demo");
+  setText("#payment-status-pill", mandateReady ? "Mandate" : passReady ? "Pass" : "Lokaal");
   setText(
     "#setup-mandate-copy",
     mandateReady
@@ -3244,9 +3244,9 @@ async function setupPaymentPermissionLive() {
     syncPaymentModel();
     persistCoreState();
     showSheet({
-      label: "Demo",
+      label: "Lokaal",
       title: "Betaaltoestemming staat aan",
-      message: "Geen backend ingesteld. In productie loopt dit via Stripe Checkout/SetupIntent + webhook bij miss.",
+      message: "Geen backend ingesteld. Er wordt niets afgeschreven; koppel Stripe om echte checkout en webhooks te activeren.",
     });
     return;
   }
@@ -3269,7 +3269,7 @@ async function setupPaymentPermissionLive() {
     const ready = Boolean(health?.stripe_ready);
     const checkout = await api.post("/api/payments/pass-checkout", {
       user_id: userId,
-      email: email || "demo@example.com",
+      email: email || "",
       group_id: state.group.id,
     });
 
@@ -3278,7 +3278,7 @@ async function setupPaymentPermissionLive() {
     persistCoreState();
 
     showSheet({
-      label: ready ? "Stripe" : "Demo backend",
+      label: ready ? "Stripe" : "Backend",
       title: "Billing flow gestart",
       message: `Checkout URL ontvangen (${checkout.mode}). Open de link om je Pressure Pass te starten. Daarna kan de backend off-session miss fees verwerken.`,
       primary: "Open Checkout",
@@ -3294,7 +3294,7 @@ async function setupPaymentPermissionLive() {
     showSheet({
       label: "Offline fallback",
       title: "Backend niet bereikbaar",
-      message: "Toestemming staat lokaal aan zodat je UI flow klopt. Stel later een API base in voor echte Stripe calls.",
+      message: "Toestemming staat lokaal aan zodat de flow niet vastloopt. Stel een API base in voor echte Stripe calls.",
     });
   }
 }
@@ -3314,9 +3314,9 @@ async function setupMandateLive() {
     syncPaymentModel();
     persistCoreState();
     showSheet({
-      label: "Demo",
-      title: "Payment method (demo) opgeslagen",
-      message: "Geen backend ingesteld. In productie loopt dit via Stripe Checkout (setup mode) of SetupIntent.",
+      label: "Lokaal",
+      title: "Payment method consent staat lokaal aan",
+      message: "Geen backend ingesteld. Er wordt niets opgeslagen bij Stripe totdat je een API base koppelt.",
     });
     return;
   }
@@ -3345,7 +3345,7 @@ async function setupMandateLive() {
     const ready = Boolean(health?.stripe_ready);
     const session = await api.post("/api/payments/setup-session", {
       user_id: userId,
-      email: email || "demo@example.com",
+      email: email || "",
       group_id: state.group.id,
       stripe_customer_id: state.stripeCustomerId || "",
       currency: "eur",
@@ -3356,7 +3356,7 @@ async function setupMandateLive() {
     persistCoreState();
 
     showSheet({
-      label: ready ? "Stripe" : "Demo backend",
+      label: ready ? "Stripe" : "Backend",
       title: "Payment method setup gestart",
       message: `Setup URL ontvangen (${session.mode}). Na afronden keert Stripe terug naar de app en slaan we je payment method id op.`,
       primary: "Open setup",
@@ -3368,7 +3368,7 @@ async function setupMandateLive() {
   } catch {
     showSheet({
       label: "Mandate",
-      title: "Setup failed",
+      title: "Setup mislukt",
       message: "Backend endpoint is niet bereikbaar of gaf een error. Je kunt ook via Customer Portal een payment method toevoegen.",
     });
   } finally {
@@ -3385,6 +3385,14 @@ function formatLedgerMoney(amountCents, currency = "eur") {
   return `${String(currency || "eur").toUpperCase()} ${amount.replace(/\\.00$/, "")}`;
 }
 
+function ledgerStatusLabel(status) {
+  const value = String(status || "ok").trim();
+  if (value === "simulated") return "Lokaal";
+  if (value === "needs_setup") return "Setup nodig";
+  if (value === "charged") return "Charged";
+  return value;
+}
+
 function renderLedgerEntry(entry) {
   const row = document.createElement("article");
   row.setAttribute("role", "listitem");
@@ -3396,7 +3404,7 @@ function renderLedgerEntry(entry) {
   title.textContent = entry.description || entry.kind.replaceAll("_", " ");
 
   const meta = document.createElement("em");
-  meta.textContent = entry.amountCents ? formatLedgerMoney(entry.amountCents, entry.currency) : entry.status || "ok";
+  meta.textContent = entry.amountCents ? formatLedgerMoney(entry.amountCents, entry.currency) : ledgerStatusLabel(entry.status);
 
   row.appendChild(when);
   row.appendChild(title);
@@ -3417,7 +3425,7 @@ function syncLedgerUI() {
     const strong = document.createElement("strong");
     strong.textContent = "Nog geen misses";
     const em = document.createElement("em");
-    em.textContent = "Demo";
+    em.textContent = "Schoon";
     empty.appendChild(span);
     empty.appendChild(strong);
     empty.appendChild(em);
@@ -3640,7 +3648,7 @@ async function chargeMissFeeBackend() {
     showSheet({
       label: "Backend",
       title: "Geen API base ingesteld",
-      message: "Zet in onboarding een API base om `/api/payments/miss-fee` te testen. Zonder backend blijft de ledger demo-only.",
+      message: "Zet in onboarding een API base om `/api/payments/miss-fee` te gebruiken. Zonder backend blijft de ledger lokaal.",
     });
     return;
   }
@@ -3649,11 +3657,11 @@ async function chargeMissFeeBackend() {
     const customerId =
       state.stripeCustomerId ||
       document.querySelector("#stripe-customer-id")?.value?.trim() ||
-      "cus_demo";
+      "";
     const paymentMethodId =
       state.stripePaymentMethodId ||
       document.querySelector("#stripe-payment-method-id")?.value?.trim() ||
-      "pm_demo";
+      "";
     const response = await api.post("/api/payments/miss-fee", {
       stripe_customer_id: customerId,
       payment_method_id: paymentMethodId,
@@ -3662,7 +3670,7 @@ async function chargeMissFeeBackend() {
       amount_cents: 1000,
       reason: "missed_live_checks",
     });
-    const mode = response?.mode || "demo";
+    const mode = response?.mode || "local";
     const status = response?.status || response?.ledger_status || "ok";
     const entry = upsertLedgerEntryLocal({
       groupId: state.group.id,
@@ -3682,13 +3690,13 @@ async function chargeMissFeeBackend() {
     showSheet({
       label: "Backend",
       title: "Miss fee endpoint aangeroepen",
-      message: `Mode: ${response?.mode || "demo"}. Status: ${response?.status || response?.ledger_status || "ok"}.`,
+      message: `Mode: ${response?.mode || "local"}. Status: ${response?.status || response?.ledger_status || "ok"}.`,
     });
   } catch {
     showSheet({
       label: "Backend",
-      title: "Charge failed",
-      message: "Backend endpoint is niet bereikbaar of gaf een error. UI blijft veilig in demo mode.",
+      title: "Charge mislukt",
+      message: "Backend endpoint is niet bereikbaar of gaf een error. Er is niets afgeschreven.",
     });
   }
 }
@@ -3762,7 +3770,7 @@ async function settleTodaysMisses() {
         charge = null;
       }
 
-      const mode = charge?.mode || "demo";
+      const mode = charge?.mode || "local";
       const status = charge?.status || charge?.ledger_status || (mode === "stripe" ? "charged" : "simulated");
       const entry = upsertLedgerEntryLocal({
         groupId: state.group.id,
@@ -4433,9 +4441,9 @@ document.querySelector("#settings-button").addEventListener("click", () => {
   showSheet({
     label: "Instellingen",
     title: "Beheer je setup",
-    message: "Wijzig je naam, groep, backend API en betaalmodel. Reset kan altijd terug naar demo.",
+    message: "Wijzig je naam, groep, backend API en betaalmodel. Je kunt altijd terug naar de lokale basissetup.",
     primary: "Wijzig setup",
-    secondary: "Reset demo",
+    secondary: "Reset lokaal",
     onPrimary: () => enterOnboarding({ mode: "edit", returnTo: "profile" }),
     onSecondary: () => {
       resetToDemo();
@@ -5324,7 +5332,7 @@ document.querySelector("#onboard-form")?.addEventListener("submit", async (event
     showSheet({
       label: "Onboarding",
       title: "Opslaan mislukt",
-      message: "Er ging iets mis tijdens setup. Probeer opnieuw of gebruik demo data.",
+      message: "Er ging iets mis tijdens setup. Probeer opnieuw of ga tijdelijk door zonder account.",
     });
   } finally {
     setOnboardingSubmitBusy(false);

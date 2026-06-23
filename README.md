@@ -1,6 +1,6 @@
 # Pressure
 
-Mobile-first prototype for an accountability social app where friends keep each other consistent through live camera checks, streaks, commitment fees, and group pressure.
+Mobile-first accountability app where friends keep each other consistent through live camera checks, streaks, commitment fees, and group pressure.
 
 Live preview: https://laiointel-png.github.io/pressure-app/
 
@@ -9,7 +9,7 @@ Live preview: https://laiointel-png.github.io/pressure-app/
 - Basic-Fit-inspired orange/black/white mobile UI
 - Working Today, Group, Check, Rank, Profile, Payment Model, and Create Group screens
 - Onboarding flow with persisted user + group config (localStorage)
-- Pose-first live camera verification with MediaPipe body landmarks and demo fallback
+- Pose-first live camera verification with MediaPipe body landmarks and local fallback
 - Optional RF-DETR remote detection adapter for backend-enhanced verification
 - Payment-safe beta model: subscription + platform miss fee, no cash pot, no wallet, no winner payout
 - Group creation form, payment model choices, setup simulation, and transparent fee ledger
@@ -24,7 +24,7 @@ Open `http://localhost:5173`.
 
 ## Persisted onboarding + group config
 
-The prototype now persists user + group configuration in `localStorage` under `pressure.mvp.v1`.
+The app persists user + group configuration in `localStorage` under `pressure.mvp.v1`.
 
 - First visit shows the onboarding screen.
 - Group creation updates the stored config and propagates to Home/Group/Create screens.
@@ -46,7 +46,7 @@ The camera screen now uses a pose-first vision layer:
 - Skeleton overlay and movement scoring
 - Detection chips for person/body/motion context
 - Optional RF-DETR endpoint connection on `http://localhost:8000/api/rfdetr/detect`
-- Local demo detector when the pose model or backend is unavailable
+- Local detector fallback when the pose model or backend is unavailable
 
 See `docs/rfdetr-integration.md` and `backend/rfdetr_api_example.py`.
 
@@ -65,7 +65,7 @@ Backend sketch: `backend/payment_api_example.py` has the Stripe endpoints for Ch
 
 ## Backend (optional)
 
-For wiring the frontend to real endpoints (Stripe demo/real + group + member persistence), run the unified API server:
+For wiring the frontend to real endpoints (Stripe, group, member, check-in, and ledger persistence), run the unified API server:
 
 ```bash
 .venv/bin/python -m pip install fastapi uvicorn stripe
@@ -76,7 +76,7 @@ What the backend enables:
 
 - Group persistence/sync (`/api/groups`, `/api/invites`)
 - Members + check-ins (`/api/members`, `/api/checkins`)
-- Payment-safe billing endpoints (`/api/payments/*`) with demo fallbacks when Stripe isn’t configured
+- Payment-safe billing endpoints (`/api/payments/*`) with local-safe fallbacks when Stripe isn’t configured
 - Shared ledger events (`/api/ledger`)
 
 Stripe safety defaults:

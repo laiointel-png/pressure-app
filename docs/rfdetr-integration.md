@@ -1,6 +1,6 @@
 # Vision Integration
 
-The mobile prototype now uses a pose-first camera intelligence layer for body tracking, movement analysis, and trace gating. RF-DETR remains an optional backend-enhanced path.
+The mobile app uses a pose-first camera intelligence layer for body tracking, movement analysis, and trace gating. RF-DETR remains an optional backend-enhanced path.
 
 ## Primary flow
 
@@ -77,6 +77,6 @@ Phone camera -> frontend frame capture -> RF-DETR API -> detections -> trace UI 
 
 The local FastAPI example caches RF-DETR weights outside the repository at `~/.cache/pressure-rfdetr/`.
 
-## Local demo mode
+## Local fallback mode
 
-If the pose model or endpoint is unavailable, the app stays usable with a local demo detector. It shows the same UI states and overlay shape, but labels are simulated.
+If the pose model or endpoint is unavailable, the app stays usable with a local detector fallback. It keeps the same UI states and overlay shape without claiming that a real backend charge or remote verification happened.
