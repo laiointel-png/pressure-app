@@ -30,12 +30,22 @@ The app persists user + group configuration in `localStorage` under `pressure.mv
 - Group creation updates the stored config and propagates to Home/Group/Create screens.
 - Invite links now include a compact, self-contained group snapshot (`?join=...&g=...`) so teammates can join even without a backend.
 
-## Prototype assets
+## Local fallback assets
 
 Real-photo fallback assets are stored in `assets/` and are sourced from Pexels while Nano Banana image generation is quota-blocked:
 
 - `trace-athlete-lunge.jpg`: https://www.pexels.com/photo/focused-athlete-performing-lunges-with-dumbbells-33185468/
 - `trace-athlete-squat.jpg`: https://www.pexels.com/photo/woman-performing-squats-in-modern-gym-setting-29259728/
+
+## Exercise data
+
+The current four-check workout uses a small, curated metadata subset inspired by `hasaneyldrm/exercises-dataset`:
+
+- Source: https://github.com/hasaneyldrm/exercises-dataset
+- Used fields: exercise names, target muscles, equipment, muscle groups, and rewritten coaching cues
+- Not bundled: Gym visual thumbnails or GIF media from that repository
+
+The upstream non-media exercise data is MIT licensed; the media has separate Gym visual terms, so Pressure only uses the data layer unless a separate media license is obtained.
 
 ## Camera intelligence
 

@@ -122,10 +122,16 @@ test("camera local fallback shows trace UI and accept disabled until ready", asy
   await page.locator("#onboard-group-mode-create").check();
   await page.locator("#onboard-group-name").fill("Smoke Team");
   await page.locator("#onboard-submit").click();
+  await expect(page.locator("#next-exercise-copy")).toContainText("Pectorals");
+  await expect(page.locator("#next-exercise-copy")).toContainText("Body Weight");
   await page.evaluate(() => {
     window.location.hash = "#camera";
   });
   await expect(page.locator("#screen-camera")).toHaveClass(/active/);
+  await expect(page.locator("#camera-target")).toHaveText("Pectorals");
+  await expect(page.locator("#camera-equipment")).toHaveText("Body Weight");
+  await expect(page.locator("#camera-source")).toHaveText("Trace pack 0258");
+  await expect(page.locator("#camera-cues li")).toHaveCount(3);
 
   const accept = page.locator("#simulate-verify");
   await expect(accept).toBeDisabled();

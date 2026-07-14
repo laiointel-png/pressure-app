@@ -1084,7 +1084,15 @@ const exercises = [
   {
     title: "Goblet squat",
     short: "Geaccepteerd",
-    instruction: "Plaats je hele lichaam in beeld en zak diep genoeg voor de check.",
+    datasetId: "1760",
+    datasetName: "dumbbell goblet squat",
+    equipment: "dumbbell",
+    target: "quads",
+    muscleGroup: "glutes",
+    secondaryMuscles: ["hamstrings", "calves"],
+    instruction: "Houd de dumbbell dicht bij je borst en laat knieën, heupen en voeten volledig in beeld.",
+    cues: ["Borst blijft hoog", "Heupen zakken naar achteren", "Knieën volgen de tenen"],
+    traceFocus: "Diepte, kniehoek en rompstabiliteit",
     form: 96,
     trust: 95,
     lock: "Diepte en kniehoek goed",
@@ -1092,7 +1100,15 @@ const exercises = [
   {
     title: "Romanian deadlift",
     short: "Geaccepteerd",
-    instruction: "Houd je rug neutraal en laat de heupbeweging zichtbaar zijn.",
+    datasetId: "1459",
+    datasetName: "dumbbell romanian deadlift",
+    equipment: "dumbbell",
+    target: "glutes",
+    muscleGroup: "hamstrings",
+    secondaryMuscles: ["lower back"],
+    instruction: "Maak de heup-hinge zichtbaar: rug neutraal, knieën licht gebogen en dumbbells dicht bij je benen.",
+    cues: ["Heupen schuiven naar achteren", "Rug blijft lang", "Gewicht blijft dicht bij het lichaam"],
+    traceFocus: "Hip hinge, ruglijn en hamstring range",
     form: 93,
     trust: 94,
     lock: "Hip hinge stabiel",
@@ -1100,7 +1116,15 @@ const exercises = [
   {
     title: "Push-up hold",
     short: "10 sec live controle nodig",
-    instruction: "Zorg dat schouders, heupen en voeten zichtbaar zijn. Houd 10 sec stabiel.",
+    datasetId: "0258",
+    datasetName: "clock push-up",
+    equipment: "body weight",
+    target: "pectorals",
+    muscleGroup: "triceps",
+    secondaryMuscles: ["shoulders", "core"],
+    instruction: "Zorg dat schouders, heupen en voeten zichtbaar zijn. Houd je lichaam 10 sec als één rechte lijn.",
+    cues: ["Handen onder schouders", "Heupen blijven hoog", "Schouders, heupen en enkels op één lijn"],
+    traceFocus: "Schouderlijn, plankhouding en live stabiliteit",
     form: 88,
     trust: 92,
     lock: "Schouderhoek 10 sec vasthouden",
@@ -1108,7 +1132,15 @@ const exercises = [
   {
     title: "Walking lunge",
     short: "Vrij na oefening 3",
-    instruction: "Stap rustig zodat de camera je stride en balans kan volgen.",
+    datasetId: "1460",
+    datasetName: "walking lunge",
+    equipment: "body weight",
+    target: "glutes",
+    muscleGroup: "quadriceps",
+    secondaryMuscles: ["hamstrings", "calves"],
+    instruction: "Stap rustig vooruit zodat de camera knie-alignment, balans en stride kan volgen.",
+    cues: ["Romp blijft rechtop", "Voorste knie boven de enkel", "Stap gecontroleerd door"],
+    traceFocus: "Stride, balans en knie-alignment",
     form: 86,
     trust: 90,
     lock: "Stride symmetrie nodig",
@@ -1585,6 +1617,37 @@ function currentExercise() {
   return exercises[state.activeExerciseIndex] || exercises[exercises.length - 1];
 }
 
+function formatExerciseValue(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b[a-z]/g, (letter) => letter.toUpperCase());
+}
+
+function exerciseMetaLine(exercise) {
+  return `${formatExerciseValue(exercise.target)} · ${formatExerciseValue(exercise.equipment)}`;
+}
+
+function exerciseRowCopy(exercise, status, index) {
+  const meta = exerciseMetaLine(exercise);
+  if (status === "done") return `Geaccepteerd · ${meta}`;
+  if (status === "active") return `${exercise.short} · ${meta}`;
+  return `${meta} · vrij na oefening ${index}`;
+}
+
+function renderCameraCues(exercise) {
+  const list = document.querySelector("#camera-cues");
+  if (!list) return;
+
+  list.replaceChildren(
+    ...(exercise.cues || []).map((cue) => {
+      const item = document.createElement("li");
+      item.textContent = cue;
+      return item;
+    }),
+  );
+}
+
 function renderHomeProgress(count) {
   const progress = document.querySelector("#home-progress");
   if (!progress) return;
@@ -1615,14 +1678,16 @@ function updateExerciseRows() {
     const index = Number(row.dataset.exerciseIndex);
     const status = row.querySelector("em");
     const small = row.querySelector("small");
+    const title = row.querySelector("strong");
     const exercise = exercises[index];
 
     row.classList.remove("done", "active", "locked");
+    if (title) title.textContent = exercise.title;
 
     if (index < state.todayChecks) {
       row.classList.add("done");
       if (status) status.textContent = "Klaar";
-      if (small) small.textContent = "Geaccepteerd";
+      if (small) small.textContent = exerciseRowCopy(exercise, "done", index);
       row.setAttribute("aria-label", `${exercise.title} klaar`);
       return;
     }
@@ -1630,14 +1695,14 @@ function updateExerciseRows() {
     if (index === state.activeExerciseIndex && state.todayChecks < exercises.length) {
       row.classList.add("active");
       if (status) status.textContent = "Start";
-      if (small) small.textContent = exercise.short;
+      if (small) small.textContent = exerciseRowCopy(exercise, "active", index);
       row.setAttribute("aria-label", `${exercise.title} is nu aan de beurt`);
       return;
     }
 
     row.classList.add("locked");
     if (status) status.textContent = "Locked";
-    if (small) small.textContent = `Vrij na oefening ${index}`;
+    if (small) small.textContent = exerciseRowCopy(exercise, "locked", index);
     row.setAttribute("aria-label", `${exercise.title} locked`);
   });
 }
@@ -1665,7 +1730,7 @@ function updateHome() {
   setText("#home-title", left === 0 ? "Workout telt vandaag" : `Nog ${left} check${left === 1 ? "" : "s"} tot je workout telt`);
   setText("#main-cta-label", left === 0 ? "Bekijk resultaat" : `Start oefening ${state.activeExerciseIndex + 1}`);
   setText("#next-exercise-label", current.title);
-  setText("#next-exercise-copy", left === 0 ? "Alle oefeningen zijn geaccepteerd" : current.short);
+  setText("#next-exercise-copy", left === 0 ? "Alle oefeningen zijn geaccepteerd" : `${current.short} · ${exerciseMetaLine(current)}`);
 
   renderHomeProgress(state.todayChecks);
   updateExerciseRows();
@@ -2466,9 +2531,13 @@ function updateCamera() {
   setText("#camera-title", current.title);
   setText("#camera-step-label", `Oefening ${state.activeExerciseIndex + 1} van 4`);
   setText("#camera-instruction", current.instruction);
+  setText("#camera-equipment", formatExerciseValue(current.equipment));
+  setText("#camera-target", formatExerciseValue(current.target));
+  setText("#camera-source", `Trace pack ${current.datasetId}`);
   setText("#form-score", `${state.form}%`);
   setText("#trust-score", `${state.trust}%`);
   setText("#angle-line", current.lock);
+  renderCameraCues(current);
 
   const fill = document.querySelector("#trace-fill");
   const bar = document.querySelector(".trace-bar");
@@ -2793,7 +2862,10 @@ function updateTraceGateUI() {
   if (bar) bar.setAttribute("aria-valuenow", String(progress));
 
   setText("#trace-timer", ready ? "DONE" : `00:${String(leftSeconds).padStart(2, "0")}`);
-  setText("#trace-hint", ready ? "Trace locked. Je kunt deze oefening nu accepteren." : "Blijf in beeld. De check opent pas na 10 seconden live trace.");
+  setText(
+    "#trace-hint",
+    ready ? "Trace locked. Je kunt deze oefening nu accepteren." : `${currentExercise().traceFocus}. Blijf 10 seconden live in beeld.`,
+  );
   setText("#motion-score", state.cameraPaused ? "Pauze" : ready ? "Ready" : canProgress ? `${vision.poseMotionScore || 0}%` : "Wacht");
 
   setTraceLine(
